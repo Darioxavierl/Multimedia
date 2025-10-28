@@ -1,0 +1,21 @@
+# Entorno virtual
+venv/
+env/
+.venv/
+.env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Archivos de configuración de IDE
+.idea/
+.vscode/
+
+# Videos
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.yuv
+*.y4m
