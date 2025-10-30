@@ -1,0 +1,51 @@
+
+Video                     GOP_Len_Prom I_Frames   P_Frames   B_Frames  
+-----------------------------------------------------------------
+
+[+] Analizando GOP de: bus_cif_h264_gop15.mp4
+   → Extrayendo tipos de frames con ffprobe...
+   → Total frames: 150
+   → I: 10 | P: 41 | B: 99
+   → Promedio longitud GOP: 15.0
+
+[+] Analizando GOP de: coastguard_cif_h264_gop15.mp4
+   → Extrayendo tipos de frames con ffprobe...
+   → Total frames: 300
+   → I: 20 | P: 102 | B: 178
+   → Promedio longitud GOP: 15.0
+
+[+] Analizando GOP de: deadline_cif_h264_gop15.mp4
+   → Extrayendo tipos de frames con ffprobe...
+   → Total frames: 1374
+   → I: 92 | P: 370 | B: 912
+   → Promedio longitud GOP: 14.9
+
+[+] Analizando GOP de: highway_cif_h264_gop15.mp4
+   → Extrayendo tipos de frames con ffprobe...
+   → Total frames: 2000
+   → I: 134 | P: 537 | B: 1329
+   → Promedio longitud GOP: 14.9
+
+[+] Analizando GOP de: mad900_cif_h264_gop15.mp4
+   → Extrayendo tipos de frames con ffprobe...
+   → Total frames: 900
+   → I: 60 | P: 240 | B: 600
+   → Promedio longitud GOP: 15.0
+
+[+] Analizando GOP de: mobile_cif_h264_gop15.mp4
+   → Extrayendo tipos de frames con ffprobe...
+   → Total frames: 300
+   → I: 20 | P: 81 | B: 199
+   → Promedio longitud GOP: 15.0
+
+Resumen final:
+Video                     GOP_Len    I_Frames   P_Frames   B_Frames  
+-----------------------------------------------------------------
+bus_cif_h264_gop15.mp4    15.0       10         41         99        
+coastguard_cif_h264_gop15.mp4 15.0       20         102        178       
+deadline_cif_h264_gop15.mp4 14.9       92         370        912       
+highway_cif_h264_gop15.mp4 14.9       134        537        1329      
+mad900_cif_h264_gop15.mp4 15.0       60         240        600       
+mobile_cif_h264_gop15.mp4 15.0       20         81         199       
+
+✔ Tabla exportada a: logs_codificados_gop_15//gop_summary.csv

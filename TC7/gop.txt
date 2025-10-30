@@ -1,0 +1,51 @@
+
+Video                     GOP_Len_Prom I_Frames   P_Frames   B_Frames  
+-----------------------------------------------------------------
+
+[+] Analizando GOP de: bus_cif_3000.mp4
+   → Extrayendo tipos de frames con ffprobe...
+   → Total frames: 150
+   → I: 1 | P: 40 | B: 109
+   → Promedio longitud GOP: 150.0
+
+[+] Analizando GOP de: coastguard_cif_3000.mp4
+   → Extrayendo tipos de frames con ffprobe...
+   → Total frames: 300
+   → I: 2 | P: 101 | B: 197
+   → Promedio longitud GOP: 150.0
+
+[+] Analizando GOP de: deadline_cif_3000.mp4
+   → Extrayendo tipos de frames con ffprobe...
+   → Total frames: 1374
+   → I: 6 | P: 350 | B: 1018
+   → Promedio longitud GOP: 229.0
+
+[+] Analizando GOP de: highway_cif_3000.mp4
+   → Extrayendo tipos de frames con ffprobe...
+   → Total frames: 2000
+   → I: 8 | P: 511 | B: 1481
+   → Promedio longitud GOP: 250.0
+
+[+] Analizando GOP de: mad900_cif_3000.mp4
+   → Extrayendo tipos de frames con ffprobe...
+   → Total frames: 900
+   → I: 4 | P: 227 | B: 669
+   → Promedio longitud GOP: 225.0
+
+[+] Analizando GOP de: mobile_cif_3000.mp4
+   → Extrayendo tipos de frames con ffprobe...
+   → Total frames: 300
+   → I: 2 | P: 76 | B: 222
+   → Promedio longitud GOP: 150.0
+
+Resumen final:
+Video                     GOP_Len    I_Frames   P_Frames   B_Frames  
+-----------------------------------------------------------------
+bus_cif_3000.mp4          150.0      1          40         109       
+coastguard_cif_3000.mp4   150.0      2          101        197       
+deadline_cif_3000.mp4     229.0      6          350        1018      
+highway_cif_3000.mp4      250.0      8          511        1481      
+mad900_cif_3000.mp4       225.0      4          227        669       
+mobile_cif_3000.mp4       150.0      2          76         222       
+
+✔ Tabla exportada a: logs_codificados//gop_summary.csv
