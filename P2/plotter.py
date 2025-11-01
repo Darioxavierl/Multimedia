@@ -61,13 +61,25 @@ ci95        = [ci95[i]        for i in sorted_idx]
 # GRAFICA DE BARRAS
 # ===========================
 plt.figure(figsize=(10,6))
-plt.bar(video_names, means, yerr=ci95, capsize=5, color='skyblue')
+bars = plt.bar(video_names, means, yerr=ci95, capsize=5, color='skyblue')
 plt.ylabel("PSNR (dB)")
 plt.xlabel("Video")
 plt.title("PSNR promedio con IC 95% por video")
 plt.xticks(rotation=45, ha='right')
 plt.tight_layout()
 plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+# ===========================
+# IMPRIMIR VALORES SOBRE CADA BARRA
+# ===========================
+for bar, mean, h in zip(bars, means, ci95):
+    height = bar.get_height()
+    plt.text(
+        bar.get_x() + bar.get_width()/2,
+        height + 0.3,
+        f"{mean:.2f} ± {h:.2f}",
+        ha='center', va='bottom', fontsize=9, fontweight='bold'
+    )
 
 plt.savefig(OUTPUT_PLOT, dpi=300)
 plt.show()

@@ -40,12 +40,14 @@ echo "[+] Iniciando codificación con libx264 (mismo FPS y tamaño que el origin
 for QP in 5 15 22 28 35 45 51; do
   OUTPUT_FILE="${OUTPUT_DIR}/${VIDEO_NAME}_${QP}.mp4"
   echo "     → Codificando a ${QP} QP..."
-  
   ffmpeg -y -f rawvideo -pix_fmt yuv420p -s:v "${width}x${height}" -r "$fps" -i "$INPUT_YUV" \
-    -c:v libx264 -crf $QP -pix_fmt yuv420p -r "$fps" "$OUTPUT_FILE"
+  -c:v libx264 -qmin $QP -qmax $QP -pix_fmt yuv420p -r "$fps" "$OUTPUT_FILE"
+
+  ffmpeg -y -f rawvideo -pix_fmt yuv420p -s:v "${width}x${height}" 
 done
 
 echo "[✓] Codificación completada."
+  ffmpeg -y -f rawvideo -pix_fmt yuv420p -s:v "${width}x${height}" 
 echo "[✓] Archivos generados en: $OUTPUT_DIR"
 
 # ==========================
@@ -53,8 +55,8 @@ echo "[✓] Archivos generados en: $OUTPUT_DIR"
 # ==========================
 echo
 echo "[*] Verificando FPS de los videos generados:"
-for QP in 55 15 22 28 35 45 51; do
-  OUTPUT_FILE="${OUTPUT_DIR}/${VIDEO_NAME}_${QP}.mp4"
+for QP in 5 15 22 28 35 45 51; do
+  OUTPUT_FILE="${OUTPUT_DIR}/${VIDEO_NAME}_${QP}.y4m"
   rate=$(ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate \
          -of default=nk=1:nw=1 "$OUTPUT_FILE" | awk -F'/' '{printf "%.3f", $1/$2}')
   echo "     ${VIDEO_NAME}_${QP}.mp4 → ${rate} fps"

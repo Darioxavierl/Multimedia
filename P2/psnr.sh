@@ -40,7 +40,7 @@ for VIDEO in "$INPUT_DIR"/*.y4m; do
     #   CALCULAR PSNR FRAME A FRAME
     # ======================================
     ffmpeg -i "$ORIGINAL_PATH" -i "$VIDEO" \
-        -lavfi psnr="stats_file=$LOG_FILE" -f null - >/dev/null 2>&1
+        -lavfi psnr="stats_file=$LOG_FILE" -f null - 
 
     # ======================================
     #   EXTRAER FRAME Y PSNR A CSV

@@ -32,7 +32,7 @@ for f in "$INPUT_DIR"/*; do
     filename=$(basename -- "$f")
     name="${filename%.*}"
     echo "[+] Procesando $f → $OUTPUT_DIR/$name.mp4"
-    ffmpeg -i "$f" -pix_fmt yuv420p -fps_mode passthrough -f rawvideo "$OUTPUT_DIR/$name.yuv"
+    ffmpeg -y -i "$f" -pix_fmt yuv420p -fps_mode passthrough -f rawvideo "$OUTPUT_DIR/$name.yuv"
 done
 
 echo "[+] Encapsulando videos para la reproduccion"
@@ -45,6 +45,9 @@ else
 fi
 
 for f in "$OUTPUT_DIR"/*; do
+    # saltar si no es archivo regular
+    [ -f "$f" ] || continue
+
     filename=$(basename -- "$f")
     name="${filename%.*}"
     orig="$INPUT_DIR/$name.mp4"
@@ -58,14 +61,7 @@ for f in "$OUTPUT_DIR"/*; do
         fps=$(ffprobe -v 0 -of csv=p=0 -select_streams v:0 -show_entries stream=r_frame_rate "$orig" | bc -l)
     fi
 
-
-    ffmpeg -y -f rawvideo -pix_fmt yuv420p -s:v 352x288 -r "$fps" -i "$f"  "$OUTPUT_DIR/rep/$name.y4m"
+    ffmpeg -y -f rawvideo -pix_fmt yuv420p -s:v 352x288 -r "$fps" -i "$f" "$OUTPUT_DIR/rep/$name.y4m"
 done
 
-echo "[*] Verificando FPS de los videos generados:"
-for QP in 55 15 22 28 35 45 51; do
-  OUTPUT_FILE="${OUTPUT_DIR}/${VIDEO_NAME}_${QP}.mp4"
-  rate=$(ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate \
-         -of default=nk=1:nw=1 "$OUTPUT_FILE" | awk -F'/' '{printf "%.3f", $1/$2}')
-  echo "     ${VIDEO_NAME}_${QP}.mp4 → ${rate} fps"
-done
+
