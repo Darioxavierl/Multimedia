@@ -1,3 +1,5 @@
+# modules/profile_manager.py
+
 """
 Gestor de perfiles de configuración
 """

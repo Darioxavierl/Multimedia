@@ -2,38 +2,88 @@
 Componentes de interfaz de usuario reutilizables
 """
 
-from PyQt6.QtWidgets import QLabel, QLineEdit, QSpinBox, QHBoxLayout, QFrame
+from PyQt6.QtWidgets import QLabel, QLineEdit, QSpinBox, QHBoxLayout, QWidget, QFrame
 from PyQt6.QtCore import Qt
 
 
-class VideoWidget(QFrame):
+class VideoWidget(QWidget):
     """
-    Widget para contener el video de ffplay embebido
+    Widget para contener el video de VLC embebido
     
-    Este widget proporciona un contenedor con fondo negro donde
-    FFplay puede renderizar el video usando el window_id
+    Este widget proporciona una ventana X11 nativa donde VLC renderiza directamente.
+    Qt NO debe pintar sobre este widget - solo proporciona la ventana.
+    
+    IMPORTANTE: Heredar de QWidget (no QFrame) evita sistema de pintura interno.
     """
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(640, 480)
-        self.setStyleSheet("background-color: black; border: 2px solid #555;")
-        self.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Sunken)
         
-        # Permitir que el widget se expanda
+        # Tamaño
+        self.setMinimumSize(640, 480)
+        
+        # Estilo: solo fondo negro
+        self.setStyleSheet("background-color: black;")
+        
+        # Expandir
         self.setSizePolicy(
             self.sizePolicy().Policy.Expanding,
             self.sizePolicy().Policy.Expanding
         )
+        
+        # CRÍTICO: Hacer que sea ventana X11 NATIVA
+        self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_DontCreateNativeAncestors, True)
+        
+        # CRÍTICO: Desactivar completamente el motor de pintura de Qt
+        # Esto evita conflictos entre Qt y VLC
+        self.setAttribute(Qt.WidgetAttribute.WA_PaintOnScreen, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        
+        self.setVisible(True)
     
     def get_window_id(self):
         """
-        Obtener el ID de ventana para FFplay
+        Obtener el ID de ventana para FFplay/VLC
         
         Returns:
-            int: Window ID que FFplay puede usar
+            int: Window ID que FFplay/VLC puede usar
         """
         return int(self.winId())
+    
+    def get_effective_window_id(self):
+        """
+        Obtener el ID de ventana efectiva (más confiable para X11)
+        
+        En algunos casos, effectiveWinId() es más confiable que winId()
+        para embedding en X11.
+        
+        Returns:
+            int: Effective Window ID
+        """
+        return int(self.effectiveWinId())
+        
+    def showEvent(self, event):
+        """Se llama cuando el widget es mostrado en pantalla"""
+        super().showEvent(event)
+        print(f"  [VideoWidget] showEvent - tamaño: {self.size()}, pos: {self.pos()}")
+        # NO hacer update() - dejar que sea manejado por VLC
+    
+    def resizeEvent(self, event):
+        """Se llama cuando el widget cambia de tamaño"""
+        super().resizeEvent(event)
+        print(f"  [VideoWidget] resizeEvent - nuevo tamaño: {event.size()}")
+    
+    def paintEvent(self, event):
+        """
+        IMPORTANTE: No hacer NADA aquí.
+        VLC pinta directamente sobre la ventana X11.
+        Si Qt pinta aquí, bloquea a VLC.
+        """
+        # NO llamar a super() - evita que Qt pinte
+        # NO dibujar nada - dejar que VLC lo haga
+        pass
 
 
 def create_spin_field(layout, label_text, min_val, max_val, default):

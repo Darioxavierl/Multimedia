@@ -1,6 +1,7 @@
+#modules/ffmpeg_controller.py
 """
 Controlador de FFmpeg y FFplay
-Maneja la transmisión y recepción de video/audio
+Maneja la transmisión y recepción de video/audio (FFplay only)
 """
 
 import subprocess
@@ -9,10 +10,36 @@ import os
 
 
 class FFmpegController:
-    def __init__(self):
-        """Inicializar controlador de FFmpeg"""
+    def __init__(self, player_type="ffplay"):
+        """
+        Inicializar controlador de FFmpeg
+        
+        Args:
+            player_type: Solo "ffplay" está soportado
+        """
         self.transmit_process = None
         self.receive_process = None
+        self.player_type = "ffplay"  # Solo FFplay, sin VLC
+        
+        print(f"✅ FFmpegController inicializado - usando {self.player_type}")
+    
+    def set_player_type(self, player_type):
+        """
+        Cambiar el tipo de reproductor (no-op, solo FFplay)
+        
+        Args:
+            player_type: "ffplay" (otros tipos son ignorados)
+        """
+        if self.is_receiving():
+            self.stop_reception()
+        
+        self.player_type = "ffplay"
+        print("Usando FFplay (única opción)")
+        return True
+    
+    def get_player_type(self):
+        """Obtener el tipo de reproductor actual"""
+        return self.player_type
     
     def build_transmit_command(self, params):
         """
@@ -38,23 +65,26 @@ class FFmpegController:
             "-b:v", f"{params['video_bitrate']}k",
             "-g", str(params['gop']),
             "-r", str(params['fps_salida']),
+            "-tune", "zerolatency",
             "-c:a", params['audio_codec'],
             "-b:a", f"{params['audio_bitrate']}k",
             "-ar", str(params['muestras']),
             "-ac", str(params['canales_audio_output']),
             "-f", params['protocolo'],
+            "-flush_packets", "1",
+            "-fflags", "+genpts+igndts",     # Generar PTS, ignorar DTS
+            "-avoid_negative_ts", "make_zero",
+            "-max_interleave_delta", "0",
             params['direccion_tx']
         ]
         return cmd
     
-    def build_receive_command(self, params, win_id, video_size):
+    def build_receive_command_ffplay(self, params):
         """
-        Construir comando de recepción FFplay
+        Construir comando de recepción FFplay (ventana externa)
         
         Args:
             params: Diccionario con parámetros de configuración
-            win_id: ID de la ventana para embeber el video
-            video_size: Tupla (width, height) del widget
             
         Returns:
             list: Comando como lista de argumentos
@@ -62,12 +92,12 @@ class FFmpegController:
         cmd = [
             "ffplay",
             "-probesize", params['probesize'],
-            "-x", str(video_size[0]),
-            "-y", str(video_size[1]),
-            "-window_id", str(win_id),
             "-fflags", "nobuffer",
             "-flags", "low_delay",
             "-framedrop",
+            "-sync", "ext",
+            "-alwaysontop",
+            "-window_title", "VideoConferencia - Recepción",
             params['direccion_rx']
         ]
         return cmd
@@ -94,7 +124,7 @@ class FFmpegController:
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                preexec_fn=os.setsid  # Crear nuevo grupo de procesos
+                preexec_fn=os.setsid
             )
             return True
         except FileNotFoundError:
@@ -108,11 +138,9 @@ class FFmpegController:
         """Detener transmisión activa"""
         if self.transmit_process is not None:
             try:
-                # Enviar SIGTERM al grupo de procesos
                 os.killpg(os.getpgid(self.transmit_process.pid), signal.SIGTERM)
                 self.transmit_process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                # Si no termina, forzar con SIGKILL
                 os.killpg(os.getpgid(self.transmit_process.pid), signal.SIGKILL)
                 self.transmit_process.wait()
             except Exception as e:
@@ -121,53 +149,59 @@ class FFmpegController:
                 self.transmit_process = None
                 print("Transmisión detenida")
     
-    def start_reception(self, params, win_id, video_size):
+    def start_reception(self, params, win_id=None, video_size=None):
         """
         Iniciar recepción de video/audio
         
         Args:
             params: Diccionario con parámetros de configuración
-            win_id: ID de la ventana para embeber el video
-            video_size: Tupla (width, height) del widget
+            win_id: IGNORADO (no necesario para FFplay)
+            video_size: IGNORADO (FFplay abre en ventana independiente)
             
         Returns:
             bool: True si se inició correctamente
         """
-        if self.receive_process is not None:
+        if self.is_receiving():
             print("Ya hay una recepción activa")
             return False
         
+        return self._start_reception_ffplay(params)
+    
+    def _start_reception_ffplay(self, params):
+        """Iniciar recepción con FFplay (ventana externa)"""
+        if self.receive_process is not None:
+            print("Ya hay una recepción FFplay activa")
+            return False
+        
         try:
-            cmd = self.build_receive_command(params, win_id, video_size)
-            print(f"Iniciando recepción: {' '.join(cmd)}")
+            cmd = self.build_receive_command_ffplay(params)
+            print(f"Iniciando recepción FFplay: {' '.join(cmd)}")
             
             self.receive_process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                preexec_fn=os.setsid  # Crear nuevo grupo de procesos
+                preexec_fn=os.setsid
             )
             return True
         except FileNotFoundError:
             print("Error: FFplay no encontrado. Asegúrate de que FFmpeg esté instalado.")
             return False
         except Exception as e:
-            print(f"Error al iniciar recepción: {e}")
+            print(f"Error al iniciar recepción FFplay: {e}")
             return False
     
     def stop_reception(self):
         """Detener recepción activa"""
         if self.receive_process is not None:
             try:
-                # Enviar SIGTERM al grupo de procesos
                 os.killpg(os.getpgid(self.receive_process.pid), signal.SIGTERM)
                 self.receive_process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                # Si no termina, forzar con SIGKILL
                 os.killpg(os.getpgid(self.receive_process.pid), signal.SIGKILL)
                 self.receive_process.wait()
             except Exception as e:
-                print(f"Error al detener recepción: {e}")
+                print(f"Error al detener recepción FFplay: {e}")
             finally:
                 self.receive_process = None
                 print("Recepción detenida")
@@ -177,40 +211,8 @@ class FFmpegController:
         return self.transmit_process is not None and self.transmit_process.poll() is None
     
     def is_receiving(self):
-        """Verificar si hay recepción activa"""
+        """Verificar si hay recepción activa (FFplay)"""
         return self.receive_process is not None and self.receive_process.poll() is None
-    
-    def get_transmit_stats(self):
-        """
-        Obtener estadísticas de transmisión (si están disponibles)
-        
-        Returns:
-            dict: Estadísticas o None si no hay transmisión activa
-        """
-        if not self.is_transmitting():
-            return None
-        
-        # Aquí podrías parsear stderr de FFmpeg para obtener estadísticas
-        # Por ahora solo retornamos el estado
-        return {
-            "active": True,
-            "pid": self.transmit_process.pid
-        }
-    
-    def get_receive_stats(self):
-        """
-        Obtener estadísticas de recepción (si están disponibles)
-        
-        Returns:
-            dict: Estadísticas o None si no hay recepción activa
-        """
-        if not self.is_receiving():
-            return None
-        
-        return {
-            "active": True,
-            "pid": self.receive_process.pid
-        }
     
     def cleanup(self):
         """Limpiar todos los procesos activos"""
