@@ -20,13 +20,13 @@
     "muestras": 16000
   },
   "lejano": {
-    "fps_entrada": 20,
-    "fps_salida": 15,
-    "gop": 60,
+    "fps_entrada": 24,
+    "fps_salida": 24,
+    "gop": 1,
     "width": 854,
     "height": 480,
-    "video_bitrate": 1500,
-    "audio_bitrate": 64,
-    "muestras": 32000
+    "video_bitrate": 300,
+    "audio_bitrate": 32,
+    "muestras": 16000
   }
 }

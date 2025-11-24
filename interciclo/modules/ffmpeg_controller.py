@@ -74,12 +74,12 @@ class FFmpegController:
             "-f", "alsa",
             "-ac", str(params['canales_audio_input']),
             "-i", params['audio_device'],
-            "-c:v", "libx264",
+            "-c:v", "mpeg1video",
             "-pix_fmt", "yuv420p",
             "-b:v", f"{params['video_bitrate']}k",
             "-g", str(params['gop']),
             "-r", str(params['fps_salida']),
-            "-tune", "zerolatency",
+            #"-tune", "zerolatency",
             "-c:a", params['audio_codec'],
             "-b:a", f"{params['audio_bitrate']}k",
             "-ar", str(params['muestras']),
@@ -87,8 +87,10 @@ class FFmpegController:
             "-f", params['protocolo'],
             "-flush_packets", "1",
             "-fflags", "+genpts+igndts",     # Generar PTS, ignorar DTS
-            "-avoid_negative_ts", "make_zero",
-            "-max_interleave_delta", "0",
+            #"-avoid_negative_ts", "make_zero",
+            #"-max_interleave_delta", "0",
+            "-muxdelay", "0",
+            "-muxpreload", "0",
             params['direccion_tx']
         ]
         return cmd
@@ -110,11 +112,12 @@ class FFmpegController:
         
         cmd = [
             "ffplay",
-            "-probesize", params['probesize'],
+            #"-probesize", params['probesize'],
+            #"-analyzeduration", params['probesize'],
             "-fflags", "nobuffer",
             "-flags", "low_delay",
             "-framedrop",
-            "-sync", "ext",
+            #"-sync", "ext",
             "-alwaysontop",
             "-window_title", "VideoConferencia - Recepción",
             params['direccion_rx']

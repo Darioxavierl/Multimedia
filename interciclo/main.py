@@ -115,7 +115,7 @@ class VideoConferenceApp(QMainWindow):
         self.params['width'] = create_spin_field(video_layout, "Ancho:", 320, 3840, 1920)
         self.params['height'] = create_spin_field(video_layout, "Alto:", 240, 2160, 1080)
         self.params['video_device'] = create_text_field(video_layout, "Dispositivo Video:", "/dev/video0")
-        self.params['video_bitrate'] = create_spin_field(video_layout, "Bitrate Video (kbps):", 500, 50000, 8000)
+        self.params['video_bitrate'] = create_spin_field(video_layout, "Bitrate Video (kbps):", 100, 50000, 8000)
         self.params['controlador'] = create_text_field(video_layout, "Controlador:", "v4l2")
         
         video_layout.addStretch()
