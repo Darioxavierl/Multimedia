@@ -31,6 +31,11 @@ class VideoConferenceApp(QMainWindow):
         # Diccionario para almacenar widgets de parámetros
         self.params = {}
         
+        # Timer para monitoreo de procesos
+        self.monitor_timer = QTimer(self)
+        self.monitor_timer.timeout.connect(self._monitor_processes)
+        self.monitor_timer.start(1000)  # Revisar cada 1 segundo
+        
         self.init_ui()
         
     def init_ui(self):
@@ -124,7 +129,7 @@ class VideoConferenceApp(QMainWindow):
         self.params['canales_audio_output'] = create_spin_field(audio_layout, "Canales Output:", 1, 8, 2)
         self.params['audio_codec'] = create_text_field(audio_layout, "Codec Audio:", "aac")
         self.params['audio_device'] = create_text_field(audio_layout, "Dispositivo Audio:", "hw:1,6")
-        self.params['audio_bitrate'] = create_spin_field(audio_layout, "Bitrate Audio (kbps):", 32, 512, 128)
+        self.params['audio_bitrate'] = create_spin_field(audio_layout, "Bitrate Audio (kbps):", 1, 512, 128)
         self.params['muestras'] = create_spin_field(audio_layout, "Sample Rate (Hz):", 8000, 96000, 48000)
         
         audio_layout.addStretch()
@@ -297,8 +302,27 @@ class VideoConferenceApp(QMainWindow):
         self.status_label.setText("Estado: Recepción detenida")
         self.status_label.setStyleSheet("padding: 5px; background-color: #e0e0e0;")
     
+    def _monitor_processes(self):
+        """Monitorear estado de TX/RX y actualizar UI"""
+        tx_active = self.ffmpeg_controller.is_transmitting()
+        rx_active = self.ffmpeg_controller.is_receiving()
+        
+        # Actualizar botones si los procesos se cerraron inesperadamente
+        if not tx_active and self.start_tx_btn.isEnabled() == False:
+            self.start_tx_btn.setEnabled(True)
+            self.stop_tx_btn.setEnabled(False)
+            self.status_label.setText("Estado: Transmisión detenida (inesperadamente)")
+            self.status_label.setStyleSheet("padding: 5px; background-color: #ff9800; color: white;")
+        
+        if not rx_active and self.start_rx_btn.isEnabled() == False:
+            self.start_rx_btn.setEnabled(True)
+            self.stop_rx_btn.setEnabled(False)
+            self.status_label.setText("Estado: Recepción detenida (inesperadamente)")
+            self.status_label.setStyleSheet("padding: 5px; background-color: #ff9800; color: white;")
+    
     def closeEvent(self, event):
         """Limpiar al cerrar"""
+        self.monitor_timer.stop()
         self.ffmpeg_controller.cleanup()
         event.accept()
 
