@@ -8,9 +8,9 @@ from scipy.stats import t
 # ---------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------
-BASE_DIR = "mediciones"   # Ruta base donde están userA/ y userB/
+BASE_DIR = "mediciones"
 PROFILES = ["cercano", "medio", "lejano"]
-PORT = 39400   # Cambia si necesario
+PORT = 39400
 
 
 # ---------------------------------------------------------------
@@ -31,7 +31,7 @@ def load_pcap(filename, port):
 
 
 # ---------------------------------------------------------------
-# INTER-ARRIVAL TIME (Delay capturado)
+# COMPUTE IAT (delay)
 # ---------------------------------------------------------------
 def compute_iat(ts, discard_seconds=1.0):
     if len(ts) < 2:
@@ -39,7 +39,6 @@ def compute_iat(ts, discard_seconds=1.0):
 
     t0 = ts[0] + discard_seconds
     ts = ts[ts >= t0]
-
     if len(ts) < 2:
         return np.array([])
 
@@ -83,7 +82,7 @@ def confidence_interval(data, confidence=0.90):
 # ---------------------------------------------------------------
 # GRAFICAR PROMEDIOS CON LÍNEA Y TEXTO
 # ---------------------------------------------------------------
-def plot_with_mean(ax, x, y, title, ylabel,xlabel):
+def plot_with_mean(ax, x, y, title, ylabel, xlabel):
     ax.plot(x, y, alpha=0.7)
     ax.set_title(title)
     ax.set_ylabel(ylabel)
@@ -97,30 +96,64 @@ def plot_with_mean(ax, x, y, title, ylabel,xlabel):
 
 
 # ---------------------------------------------------------------
-# PROCESAR UN PERFIL ('cercano', 'medio', 'lejano')
+# ANOTACIÓN DE BOXPLOTS (Mediana, Q1, Q3, bigotes)
+# ---------------------------------------------------------------
+def annotate_boxplot(ax, bp):
+    """
+    Añade anotaciones:
+    - Mediana
+    - Q1 y Q3
+    - Bigotes inferior y superior
+    """
+
+    # Medianas
+    for median in bp['medians']:
+        x, y = median.get_xydata()[1]
+        ax.text(x, y, f"{y:.3f}", ha='center', va='bottom', color='blue')
+
+    # Boxes: contienen Q1 y Q3
+    for box in bp['boxes']:
+        # Q1
+        x_q1, y_q1 = box.get_xydata()[0]
+        ax.text(x_q1, y_q1, f"Q1={y_q1:.3f}", ha='right', va='top', color='green')
+
+        # Q3
+        x_q3, y_q3 = box.get_xydata()[3]
+        ax.text(x_q3, y_q3, f"Q3={y_q3:.3f}", ha='left', va='bottom', color='purple')
+
+    # Bigotes
+    whiskers = bp['whiskers']
+    for i in range(0, len(whiskers), 2):
+        # Whisker inferior
+        w_low = whiskers[i]
+        x_low, y_low = w_low.get_xydata()[1]
+        ax.text(x_low, y_low, f"{y_low:.3f}", ha='center', va='top', color='cyan')
+
+        # Whisker superior
+        w_high = whiskers[i+1]
+        x_high, y_high = w_high.get_xydata()[1]
+        ax.text(x_high, y_high, f"{y_high:.3f}", ha='center', va='bottom', color='red')
+
+
+# ---------------------------------------------------------------
+# PROCESAR PERFIL
 # ---------------------------------------------------------------
 def process_profile(profile):
-
-    results = {}  # Para recopilar promedios globales
-
+    results = {}
     for user in ["userA", "userB"]:
-
         pcap_path = os.path.join(BASE_DIR, user, profile, f"{profile}.pcap")
         ts, size = load_pcap(pcap_path, PORT)
 
-        # Normalizar tiempo
         ts_norm = ts - ts[0]
 
-        # Delay
         iat = compute_iat(ts_norm)
         iat_ms = iat * 1000
 
-        # Throughput
         t_thr, thr = compute_throughput(ts_norm, size)
 
         results[user] = {
             "iat": iat_ms,
-            "thr": thr/1e6,   # Mbps
+            "thr": thr / 1e6,
         }
 
     return results
@@ -131,32 +164,32 @@ def process_profile(profile):
 # ---------------------------------------------------------------
 def main():
     profile_stats_thr = {}
-    profile_stats_iat = {}
+    all_iat_A = []
+    all_iat_B = []
 
     for profile in PROFILES:
         print(f"\nProcesando perfil: {profile}")
-
         results = process_profile(profile)
 
         # -------------------------
-        # FIGURA THROUGHPUT
+        # THROUGHPUT
         # -------------------------
         fig, ax = plt.subplots(1, 2, figsize=(14, 6))
         fig.suptitle(f"Throughput – Perfil: {profile}")
 
         plot_with_mean(ax[0], np.arange(len(results["userA"]["thr"])),
                        results["userA"]["thr"],
-                       "User A", "Mbps","Tiempo")
+                       "User A", "Mbps", "Tiempo")
 
         plot_with_mean(ax[1], np.arange(len(results["userB"]["thr"])),
                        results["userB"]["thr"],
                        "User B", "Mbps", "Tiempo")
-        
+
         plt.tight_layout()
         plt.show()
 
         # -------------------------
-        # FIGURA DELAY (IAT)
+        # DELAY (IAT)
         # -------------------------
         fig, ax = plt.subplots(1, 2, figsize=(14, 6))
         fig.suptitle(f"Delay (IAT) – Perfil: {profile}")
@@ -168,75 +201,45 @@ def main():
         plot_with_mean(ax[1], np.arange(len(results["userB"]["iat"])),
                        results["userB"]["iat"],
                        "User B", "ms", "No. Paquetes")
-    
+
         plt.tight_layout()
         plt.show()
 
-        # -----------------------------------------------------
-        # GUARDAR ESTADÍSTICAS PARA BARRAS + CI
-        # -----------------------------------------------------
-        thr_means = []
-        thr_cis = []
-        iat_means = []
-        iat_cis = []
+        all_iat_A.append(results["userA"]["iat"])
+        all_iat_B.append(results["userB"]["iat"])
 
+        # Estadísticas throughput
+        thr_means, thr_cis = [], []
         for user in ["userA", "userB"]:
             m, ci = confidence_interval(results[user]["thr"])
             thr_means.append(m)
             thr_cis.append(ci)
 
-            m2, ci2 = confidence_interval(results[user]["iat"])
-            iat_means.append(m2)
-            iat_cis.append(ci2)
-
         profile_stats_thr[profile] = (thr_means, thr_cis)
-        profile_stats_iat[profile] = (iat_means, iat_cis)
 
     # ===========================================================
-    # GRÁFICAS DE BARRAS + CI  (THROUGHPUT)
+    # BOXPLOTS DEL DELAY + ANOTACIONES
     # ===========================================================
-    labels = PROFILES
-    x = np.arange(len(labels))
+    fig, ax = plt.subplots(1, 2, figsize=(14, 7))
+    fig.suptitle("Distribución del Delay (IAT) – Boxplots por Perfil")
 
-    userA_means = [profile_stats_thr[p][0][0] for p in PROFILES]
-    userA_err = [profile_stats_thr[p][1][0] for p in PROFILES]
+    # --- User A ---
+    bpA = ax[0].boxplot(all_iat_A, tick_labels=PROFILES, showfliers=True)
+    ax[0].set_title("User A")
+    ax[0].set_ylabel("Delay (ms)")
+    ax[0].set_yscale('log')
+    ax[0].grid(axis='y')
+    annotate_boxplot(ax[0], bpA)
 
-    userB_means = [profile_stats_thr[p][0][1] for p in PROFILES]
-    userB_err = [profile_stats_thr[p][1][1] for p in PROFILES]
+    # --- User B ---
+    bpB = ax[1].boxplot(all_iat_B, tick_labels=PROFILES, showfliers=True)
+    ax[1].set_title("User B")
+    ax[1].set_ylabel("Delay (ms)")
+    ax[1].set_yscale('log')
+    ax[1].grid(axis='y')
+    annotate_boxplot(ax[1], bpB)
 
-    width = 0.35
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(x - width/2, userA_means, width, yerr=userA_err, label="User A", capsize=6)
-    ax.bar(x + width/2, userB_means, width, yerr=userB_err, label="User B", capsize=6)
-
-    ax.set_ylabel("Throughput (Mbps)")
-    ax.set_title("Promedio + Intervalo de Confianza (90%) – Throughput")
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    ax.grid(axis='y')
-    ax.legend()
-    plt.show()
-
-    # ===========================================================
-    # GRÁFICAS DE BARRAS + CI  (DELAY)
-    # ===========================================================
-    userA_means = [profile_stats_iat[p][0][0] for p in PROFILES]
-    userA_err = [profile_stats_iat[p][1][0] for p in PROFILES]
-
-    userB_means = [profile_stats_iat[p][0][1] for p in PROFILES]
-    userB_err = [profile_stats_iat[p][1][1] for p in PROFILES]
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(x - width/2, userA_means, width, yerr=userA_err, label="User A", capsize=6)
-    ax.bar(x + width/2, userB_means, width, yerr=userB_err, label="User B", capsize=6)
-
-    ax.set_ylabel("Delay (ms)")
-    ax.set_title("Promedio + Intervalo de Confianza (90%) – Delay (IAT)")
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    ax.grid(axis='y')
-    ax.legend()
+    plt.tight_layout()
     plt.show()
 
 
