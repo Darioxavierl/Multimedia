@@ -1,2 +1,6 @@
 PyQt6
 python-vlc
+matplotlib
+scipy
+numpy
+scapy
