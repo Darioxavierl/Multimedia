@@ -81,8 +81,8 @@ class FFmpegController:
             "-x264-params", "slice-max-size=1300:scenecut=0:intra-refresh=1",
             "-pix_fmt", "yuv420p",
             "-b:v", f"{params['video_bitrate']}k",
-            "-g", str(params['gop']),
-            "-r", str(params['fps_salida']),
+            #"-g", str(params['gop']),
+            #"-r", str(params['fps_salida']),
             "-preset", "ultrafast",
             "-tune", "zerolatency",
             # --- AUDIO CODEC ---

@@ -218,6 +218,32 @@ def main():
         profile_stats_thr[profile] = (thr_means, thr_cis)
 
     # ===========================================================
+    # GRÁFICAS DE BARRAS + CI (THROUGHPUT)
+    # ===========================================================
+    labels = PROFILES
+    x = np.arange(len(labels))
+
+    userA_means = [profile_stats_thr[p][0][0] for p in PROFILES]
+    userA_err = [profile_stats_thr[p][1][0] for p in PROFILES]
+
+    userB_means = [profile_stats_thr[p][0][1] for p in PROFILES]
+    userB_err = [profile_stats_thr[p][1][1] for p in PROFILES]
+
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.bar(x - width/2, userA_means, width, yerr=userA_err, label="User A", capsize=6)
+    ax.bar(x + width/2, userB_means, width, yerr=userB_err, label="User B", capsize=6)
+
+    ax.set_ylabel("Throughput (Mbps)")
+    ax.set_title("Promedio + Intervalo de Confianza (90%) – Throughput")
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.grid(axis='y')
+    ax.legend()
+    plt.show()
+
+    # ===========================================================
     # BOXPLOTS DEL DELAY + ANOTACIONES
     # ===========================================================
     fig, ax = plt.subplots(1, 2, figsize=(14, 7))
