@@ -67,28 +67,36 @@ class FFmpegController:
         """
         cmd = [
             "ffmpeg",
+            # --- VIDEO INPUT ---
             "-f", params['controlador'],
             "-framerate", str(params['fps_entrada']),
             "-video_size", f"{params['width']}x{params['height']}",
             "-i", params['video_device'],
+            # --- AUDIO INPUT ---
             "-f", "alsa",
             "-ac", str(params['canales_audio_input']),
             "-i", params['audio_device'],
-            "-c:v", "mpeg1video",
+            # --- VIDEO CODEC ---
+            "-c:v", "libx264",
+            "-x264-params", "slice-max-size=1300:scenecut=0:intra-refresh=1",
             "-pix_fmt", "yuv420p",
             "-b:v", f"{params['video_bitrate']}k",
             "-g", str(params['gop']),
             "-r", str(params['fps_salida']),
-            #"-tune", "zerolatency",
+            "-preset", "ultrafast",
+            "-tune", "zerolatency",
+            # --- AUDIO CODEC ---
             "-c:a", params['audio_codec'],
             "-b:a", f"{params['audio_bitrate']}k",
             "-ar", str(params['muestras']),
             "-ac", str(params['canales_audio_output']),
+             # --- SALIDA / NETWORK ---
             "-f", params['protocolo'],
+            # --- CONTROL DE BUFFER ---
             "-flush_packets", "1",
-            "-fflags", "+genpts+igndts",     # Generar PTS, ignorar DTS
-            #"-avoid_negative_ts", "make_zero",
-            #"-max_interleave_delta", "0",
+            "-fflags", "nobuffer+genpts+igndts",
+            "-flags", "low_delay",
+            "-max_delay", "0",
             "-muxdelay", "0",
             "-muxpreload", "0",
             params['direccion_tx']
@@ -112,13 +120,13 @@ class FFmpegController:
         
         cmd = [
             "ffplay",
-            #"-probesize", params['probesize'],
-            #"-analyzeduration", params['probesize'],
-            "-fflags", "nobuffer",
+            "-probesize", params['probesize'],
+            "-analyzeduration", params['probesize'],
+            "-fflags", "nobuffer+discardcorrupt",
             "-flags", "low_delay",
             "-framedrop",
-            #"-sync", "ext",
             "-alwaysontop",
+            "-vcodec", "h264",
             "-window_title", "VideoConferencia - Recepción",
             params['direccion_rx']
         ]
