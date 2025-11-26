@@ -1,0 +1,1056 @@
+================================================================================
+                    VIDEOCONFERENCIA P2P - GUÍA TÉCNICA COMPLETA
+================================================================================
+
+VERSIÓN: 1.0 (Hotspot WiFi)
+FECHA: 2025
+AUTOR: Proyecto Interciclo
+LICENCIA: GPL v3
+
+================================================================================
+1. RESUMEN EJECUTIVO
+================================================================================
+
+Este documento describe en detalle el funcionamiento de la aplicación de
+videollamada P2P basada en FFmpeg. Está diseñada para Ubuntu y permite
+comunicación audio/video entre dos computadoras mediante UDP sobre hotspot WiFi.
+
+FLUJO GENERAL:
+  PC A (TX)     UDP/MPEG-1    PC B (RX)
+  FFmpeg -----> @:39400 ----> FFplay
+  
+  PC B (TX)     UDP/MPEG-1    PC A (RX)
+  FFmpeg -----> @:39400 ----> FFplay
+
+================================================================================
+2. ARQUITECTURA DEL SISTEMA
+================================================================================
+
+2.1 COMPONENTES PRINCIPALES
+────────────────────────────
+
+[main.py]
+  ↓
+  ├─ VideoConferenceApp (PyQt6 QMainWindow)
+  │  ├─ UI: Tabs de configuración (Video, Audio, Red)
+  │  ├─ Botones: Start/Stop TX/RX
+  │  ├─ Monitor: Timer que revisa estado de procesos cada 1s
+  │  └─ Manejo de eventos: clicks, cambios de perfil
+  │
+  ├─ FFmpegController (modules/ffmpeg_controller.py)
+  │  ├─ build_transmit_command(): arma comando ffmpeg
+  │  ├─ build_receive_command_ffplay(): arma comando ffplay
+  │  ├─ start_transmission(): lanza proceso TX en hilo
+  │  ├─ start_reception(): lanza proceso RX en hilo
+  │  ├─ stop_transmission() / stop_reception(): detiene con SIGTERM/SIGKILL
+  │  ├─ _monitor_tx / _monitor_rx: monitorean procesos
+  │  └─ cleanup(): limpieza al cerrar app
+  │
+  └─ ProfileManager (modules/profile_manager.py)
+     ├─ _load_profiles(): carga config/videoconf_profiles.json
+     ├─ load_profile(name): obtiene parámetros de un perfil
+     ├─ save_profile(name, params): guarda en JSON
+     └─ get_profile_names(): lista perfiles disponibles
+
+
+2.2 FLUJO DE DATOS EN TX (TRANSMISIÓN)
+───────────────────────────────────────
+
+1. Usuario clickea "Start TX"
+2. main.py → FFmpegController.start_transmission(params)
+3. FFmpegController construye comando ffmpeg:
+   
+   ffmpeg \
+     -f v4l2 -framerate 30 -video_size 1920x1080 -i /dev/video0 \   [VIDEO IN]
+     -f alsa -ac 2 -i hw:1,6 \                                       [AUDIO IN]
+     -c:v mpeg1video -pix_fmt yuv420p -b:v 8000k -g 30 \            [CODECS]
+     -c:a aac -b:a 128k -ar 48000 \                                  [AUDIO CODEC]
+     -f mpegts udp://192.168.127.2:39400                             [UDP OUTPUT]
+
+4. Proceso FFmpeg inicia en hilo separado (subprocess.Popen)
+5. Captura frames de /dev/video0 a 30 FPS
+6. Captura audio de hw:1,6 (micrófono)
+7. Codifica MPEG-1 + AAC
+8. Encapsula en MPEG-TS
+9. Transmite UDP a IP_DESTINO:39400
+10. Monitor thread revisa cada 0.5s si proceso sigue vivo
+11. Si se detiene → señal "⚠️ Proceso de transmisión terminado"
+
+
+2.3 FLUJO DE DATOS EN RX (RECEPCIÓN)
+─────────────────────────────────────
+
+1. Usuario clickea "Start RX"
+2. main.py → FFmpegController.start_reception(params)
+3. FFmpegController construye comando ffplay:
+   
+   ffplay -window_title "VideoConferencia RX" \
+          -fflags nobuffer \
+          -flags low_delay \
+          -bufsize 1024k \
+          udp://@:39400
+
+4. FFplay se lanza en proceso separado (NO se captura stdout/stderr)
+5. Abre ventana independiente de FFplay
+6. Escucha en puerto 39400 (UDP multicast/broadcast compatible)
+7. Decodifica MPEG-TS → MPEG-1 video
+8. Decodifica AAC audio
+9. Reproduce en ventana
+10. Si usuario cierra ventana → proceso termina
+11. Si se detiene → señal "⚠️ Proceso de recepción terminado"
+
+
+2.4 SINCRONIZACIÓN (THREADING)
+───────────────────────────────
+
+TX y RX pueden correr SIMULTÁNEAMENTE en diferentes threads:
+
+┌─────────────────────────────────────────┐
+│         Thread Principal (Main)         │
+│  (PyQt6 UI - event loop)               │
+│  - Maneja clicks de botones             │
+│  - Actualiza campos de configuración    │
+│  - Llama a FFmpegController             │
+└────────┬────────────────────────────────┘
+         │
+    ┌────┴────────────────────────┬──────────────────────┐
+    │                             │                      │
+┌───▼────────────────┐    ┌──────▼─────────────┐  ┌─────▼──────────────┐
+│  TX Monitor Thread │    │ RX Monitor Thread  │  │  Process Threads   │
+│ (_monitor_tx)      │    │  (_monitor_rx)     │  │ (FFmpeg, FFplay)   │
+│ - Revisa TX c/0.5s │    │ - Revisa RX c/0.5s │  │ (subprocesses)      │
+│ - Detecta crash    │    │ - Detecta crash    │  │ - Corren en background
+└────────────────────┘    └────────────────────┘  └────────────────────┘
+
+LOCKS (threading.Lock):
+  - self.tx_lock: protege start/stop de TX
+  - self.rx_lock: protege start/stop de RX
+  - Evita race conditions al iniciar/detener simultáneamente
+
+
+================================================================================
+3. CONFIGURACIÓN DE RED
+================================================================================
+
+3.1 HOTSPOT WiFi (CONFIGURACIÓN ACTUAL)
+───────────────────────────────────────
+
+Ubuntu soporta hotspot WiFi mediante NetworkManager.
+
+PASO 1: Crear Hotspot en PC Anfitrión
+────────────────────────────────────
+
+$ sudo nmcli dev wifi hotspot ifname wlan0 ssid "videoconf" password "12345678"
+
+Resultado:
+  - Interfaz wlan0 se convierte en punto de acceso
+  - SSID: "videoconf"
+  - Contraseña: "12345678"
+  - IP del anfitrión: 192.168.127.1 (automática)
+
+PASO 2: Conectar PC Cliente
+────────────────────────────
+
+Opción A (GUI):
+  Settings → Wi-Fi → Ver redes disponibles → Conectar a "videoconf"
+
+Opción B (CLI):
+  $ nmcli dev wifi connect "videoconf" password "12345678"
+
+Verificar conexión:
+  $ nmcli device show wlan0 | grep IP4.ADDRESS
+  
+  Cliente obtiene IP: 192.168.127.xyz (dinámico, ej: 192.168.127.65)
+
+
+3.2 DIRECCIONES UDP EN LA APLICACIÓN
+────────────────────────────────────
+
+La aplicación genera comandos FFmpeg/FFplay con direcciones UDP.
+
+ESTRUCTURA:
+  - TX Address: udp://IP_DESTINO:PUERTO (a dónde envía)
+  - RX Address: udp://@:PUERTO (escucha en qué puerto)
+
+EJEMPLO PRÁCTICO:
+  
+  PC A (Anfitrión):
+    IP: 192.168.127.1
+    TX Address: udp://192.168.127.65:39400
+      → Envía a PC B puerto 39400
+    RX Address: udp://@:39400
+      → Escucha en puerto 39400 (recibe de PC B)
+  
+  PC B (Cliente):
+    IP: 192.168.127.65
+    TX Address: udp://192.168.127.1:39400
+      → Envía a PC A puerto 39400
+    RX Address: udp://@:39400
+      → Escucha en puerto 39400 (recibe de PC A)
+
+PUERTO: 39400 (arbitrario, puede cambiarse en UI)
+
+
+3.3 DIAGRAMA DE FLUJO UDP
+──────────────────────────
+
+PC A TX (192.168.127.1)        UDP Network         PC B RX
+─────────────────────────────────────────────────────────
+FFmpeg @ 192.168.127.1:xxxxx ─────────────────> FFplay escuchando
+                                                  en @:39400
+                                                  (recibe bytes)
+
+PC B TX (192.168.127.65)       UDP Network         PC A RX
+─────────────────────────────────────────────────────────
+FFmpeg @ 192.168.127.65:xxxxx ─────────────────> FFplay escuchando
+                                                  en @:39400
+                                                  (recibe bytes)
+
+
+================================================================================
+4. PERFILES DE CALIDAD
+================================================================================
+
+4.1 PROPÓSITO
+─────────────
+
+Los perfiles permiten cambiar rápidamente parámetros según condiciones de red
+y distancia entre dispositivos.
+
+4.2 TRES PERFILES PREDEFINIDOS
+───────────────────────────────
+
+┌──────────────────────────────────────────────────────────────────┐
+│ PERFIL "CERCANO" - Alta Calidad (Distancia Corta)              │
+├──────────────────────────────────────────────────────────────────┤
+│ Escenario: Mismo cuarto, WiFi fuerte, buena señal             │
+│                                                                  │
+│ Video:                                                           │
+│   - Resolución: 1920×1080 (Full HD)                            │
+│   - FPS entrada: 30                                             │
+│   - FPS salida: 30                                              │
+│   - GOP (Group of Pictures): 30                                │
+│   - Bitrate: 8000 kbps (muy alto, alta calidad)               │
+│   - Dispositivo: /dev/video0                                   │
+│   - Controlador: v4l2                                          │
+│                                                                  │
+│ Audio:                                                           │
+│   - Bitrate: 128 kbps                                          │
+│   - Codec: aac                                                 │
+│   - Muestreo: 48000 Hz                                         │
+│   - Canales: 2 (estéreo)                                       │
+│   - Dispositivo: hw:1,6                                        │
+│                                                                  │
+│ Recomendación:                                                  │
+│   → Usar para pruebas en el mismo entorno controlado           │
+│   → Máxima claridad de imagen                                  │
+│   → Consume máximo ancho de banda                              │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ PERFIL "MEDIO" - Balanceado (Distancia Moderada)               │
+├──────────────────────────────────────────────────────────────────┤
+│ Escenario: Cuartos adyacentes, WiFi normal, señal regular     │
+│                                                                  │
+│ Video:                                                           │
+│   - Resolución: 1280×720 (HD)                                  │
+│   - FPS entrada: 25                                             │
+│   - FPS salida: 25                                              │
+│   - GOP: 50                                                     │
+│   - Bitrate: 4000 kbps (moderado)                              │
+│                                                                  │
+│ Audio:                                                           │
+│   - Bitrate: 96 kbps                                           │
+│   - Muestreo: 44100 Hz                                         │
+│   - Resto igual a "cercano"                                    │
+│                                                                  │
+│ Recomendación:                                                  │
+│   → Balance entre calidad y uso de ancho de banda              │
+│   → Buen punto de partida para la mayoría de casos             │
+│   → Menor latencia que "cercano"                               │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ PERFIL "LEJANO" - Baja Latencia (Señal Débil)                  │
+├──────────────────────────────────────────────────────────────────┤
+│ Escenario: Distancia mayor, WiFi débil, mucha pérdida         │
+│                                                                  │
+│ Video:                                                           │
+│   - Resolución: 854×480 (SD)                                   │
+│   - FPS entrada: 20                                             │
+│   - FPS salida: 15                                              │
+│   - GOP: 60 (mayor = menos sync frames, menos overhead)        │
+│   - Bitrate: 1500 kbps (mínimo)                                │
+│                                                                  │
+│ Audio:                                                           │
+│   - Bitrate: 64 kbps (comprimido)                              │
+│   - Muestreo: 32000 Hz (menor que otros)                       │
+│                                                                  │
+│ Recomendación:                                                  │
+│   → Máxima eficiencia de ancho de banda                        │
+│   → Menor latencia (menos datos = más rápido)                  │
+│   → Calidad comprometida pero funcional                        │
+│   → Ideal para WiFi débil o distancias grandes                │
+└──────────────────────────────────────────────────────────────────┘
+
+4.3 CÓMO CAMBIAR PERFIL
+───────────────────────
+
+En la UI:
+  1. ComboBox "Perfil": Selecciona "cercano", "medio" o "lejano"
+  2. Automáticamente cargan los parámetros del perfil
+  3. Puedes editar valores individuales sin cambiar perfil
+  4. Los cambios se guardan en el perfil activo
+
+En configuración:
+  ~/.videoconf_profiles.json (archivo JSON)
+  
+  {
+    "cercano": { ... },
+    "medio": { ... },
+    "lejano": { ... }
+  }
+
+
+================================================================================
+5. FLUJO DE USO COMPLETO (PASO A PASO)
+================================================================================
+
+ESCENARIO: Prueba de videoconferencia entre PC A y PC B
+
+FASE 1: PREPARACIÓN DEL SISTEMA (Una sola vez)
+──────────────────────────────────────────────
+
+[Ambos PCs]
+  1. Instalar requerimientos:
+     $ sudo apt install python3-pyqt6 ffmpeg
+  
+  2. Clonar repositorio:
+     $ git clone <url-repo>
+     $ cd interciclo
+  
+  3. Crear entorno virtual:
+     $ python3 -m venv .env
+     $ source .env/bin/activate
+  
+  4. Instalar dependencias Python:
+     $ pip install -r requierements.txt
+  
+  5. Identificar dispositivos:
+     $ v4l2-ctl --list-devices    # cámara
+     $ arecord -l                  # micrófono
+     $ aplay -l                    # altavoces
+
+
+FASE 2: CONECTAR HOTSPOT
+──────────────────────
+
+[PC A - Anfitrión]
+  1. Crear hotspot:
+     $ sudo nmcli dev wifi hotspot ifname wlan0 ssid "videoconf" \
+       password "12345678"
+  
+  2. Verificar IP:
+     $ nmcli device show wlan0 | grep IP4.ADDRESS
+     → IP: 192.168.127.1
+
+[PC B - Cliente]
+  1. Conectar a hotspot:
+     $ nmcli dev wifi connect "videoconf" password "12345678"
+  
+  2. Verificar IP:
+     $ ip addr show wlan0
+     → IP: 192.168.127.xyz (ej: 192.168.127.65)
+  
+  3. Verificar conectividad:
+     $ ping 192.168.127.1
+     → Debe responder
+
+
+FASE 3: EJECUTAR APLICACIÓN
+───────────────────────
+
+[Ambos PCs, en terminales separadas]
+  1. Activar entorno:
+     $ source .env/bin/activate
+  
+  2. Iniciar aplicación:
+     $ python main.py
+  
+  3. Debe aparecer ventana UI con:
+     - Selector de perfil
+     - Tabs: Video, Audio, Red
+     - Botones: Start/Stop TX/RX
+
+
+FASE 4: CONFIGURAR DIRECCIONES UDP
+──────────────────────────────
+
+[PC A - Anfitrión (192.168.127.1)]
+  1. Tab "Red"
+  2. TX Address: udp://192.168.127.65:39400
+      (IP de PC B)
+  3. RX Address: udp://@:39400
+  4. Dejar resto por defecto
+
+[PC B - Cliente (192.168.127.65)]
+  1. Tab "Red"
+  2. TX Address: udp://192.168.127.1:39400
+      (IP de PC A)
+  3. RX Address: udp://@:39400
+
+
+FASE 5: PRUEBA INICIAL
+──────────────────────
+
+[PC A - Iniciar Transmisión]
+  1. Tab "Video" - Perfil: "medio"
+  2. Video Device: /dev/video0
+  3. Verificar dispositivo de audio está correcto
+  4. Click botón "Start TX"
+  5. Observar consola:
+     ✅ Transmisión iniciada (PID: xxxx)
+     ffmpeg: frame=123 fps=25 ...
+
+[PC B - Iniciar Recepción]
+  1. Click botón "Start RX"
+  2. Debe abrir ventana FFplay
+  3. Si hay video: ✅ Éxito
+  4. Si no hay video: Ver "Solución de Problemas"
+
+[Verificación Bidireccional]
+  1. [PC B] Click "Start TX"
+  2. [PC A] Click "Start RX"
+  3. Ambos PCs deben verse mutuamente
+
+
+FASE 6: PRUEBAS DE DISTANCIA
+─────────────────────────────
+
+Mover PC B alejándose gradualmente de PC A:
+
+  Distancia 0 m (mismo cuarto):
+    - Perfil: "cercano"
+    - Resultado esperado: Video suave, calidad alta
+
+  Distancia ~5 m (cuarto adyacente):
+    - Perfil: "medio"
+    - Resultado esperado: Video fluido, calidad normal
+
+  Distancia ~10+ m (WiFi débil):
+    - Perfil: "lejano"
+    - Resultado esperado: Video más pixelado, pero fluido
+
+Anotar:
+  - ¿A qué distancia empieza a pixelarse?
+  - ¿A qué distancia se interrumpe?
+  - ¿Qué perfil funciona mejor en cada caso?
+
+
+================================================================================
+6. DETALLE DE ARCHIVOS
+================================================================================
+
+6.1 ESTRUCTURA DE CARPETAS
+──────────────────────────
+
+interciclo/
+├── main.py                    # Aplicación principal
+├── modules/
+│   ├── __init__.py           # Importaciones de módulos
+│   ├── ffmpeg_controller.py  # Controlador FFmpeg/FFplay
+│   ├── profile_manager.py    # Gestor de perfiles JSON
+│   └── ui_components.py      # Componentes PyQt6 reutilizables
+├── config/
+│   └── videoconf_profiles.json      # Perfiles (generado automáticamente)
+├── docs/
+│   └── APPLICATION_GUIDE.txt       # Este archivo
+├── setup_hotspot.sh               # Script para crear hotspot
+├── restore_hotspot.sh             # Script para restaurar interfaz
+├── requierements.txt              # Dependencias Python
+└── .env/                          # Entorno virtual
+
+
+6.2 main.py - APLICACIÓN PRINCIPAL
+────────────────────────────────────
+
+Clase: VideoConferenceApp(QMainWindow)
+
+Responsabilidades:
+  - Crear y gestionar interfaz PyQt6
+  - Manejar eventos (clicks de botones, cambios de perfil)
+  - Coordinar entre ProfileManager y FFmpegController
+  - Monitorear estado de TX/RX con timer
+
+Métodos principales:
+  - __init__()
+      → Inicializa managers
+      → Crea UI
+      → Inicia timer de monitoreo
+  
+  - init_ui()
+      → Construye todos los widgets
+      → Conecta signals a slots
+  
+  - create_config_tabs()
+      → Crea tabs de Video, Audio, Red
+      → Crea campos para cada parámetro
+  
+  - get_current_params()
+      → Obtiene valores de todos los spinboxes y textfields
+      → Retorna dict con parámetros actuales
+  
+  - load_profile(profile_name)
+      → Carga un perfil desde ProfileManager
+      → Actualiza todos los widgets con valores del perfil
+  
+  - start_transmission()
+      → Obtiene parámetros actuales
+      → Llama FFmpegController.start_transmission()
+      → Actualiza UI (deshabilita Start TX, habilita Stop TX)
+  
+  - stop_transmission()
+      → Llama FFmpegController.stop_transmission()
+      → Actualiza UI
+  
+  - start_reception()
+      → Llama FFmpegController.start_reception()
+      → Actualiza UI
+  
+  - stop_reception()
+      → Llama FFmpegController.stop_reception()
+      → Actualiza UI
+  
+  - _monitor_processes()
+      → Se ejecuta cada 1 segundo (timer)
+      → Revisa si TX/RX siguen activos
+      → Si se detuvieron: actualiza UI y notifica
+
+
+6.3 modules/ffmpeg_controller.py
+────────────────────────────────
+
+Clase: FFmpegController
+
+Responsabilidades:
+  - Construir comandos ffmpeg y ffplay
+  - Lanzar/detener procesos
+  - Monitorear procesos en threads separados
+  - Thread-safety con locks
+
+Atributos:
+  - transmit_process: subprocess del proceso ffmpeg TX
+  - receive_process: subprocess del proceso ffplay RX
+  - tx_lock / rx_lock: threading.Lock para sincronización
+  - tx_monitoring / rx_monitoring: flags para loops de monitoreo
+  - tx_monitor_thread / rx_monitor_thread: threads de monitoreo
+
+Métodos principales:
+  - build_transmit_command(params) → list
+      Construye comando ffmpeg:
+      ["ffmpeg", "-f", "v4l2", "-i", "/dev/video0", ...]
+  
+  - build_receive_command_ffplay(params) → list
+      Construye comando ffplay:
+      ["ffplay", "-fflags", "nobuffer", "udp://@:39400"]
+  
+  - start_transmission(params) → bool
+      1. Verifica con lock que no hay TX activa
+      2. Construye comando
+      3. Lanza subprocess con preexec_fn=os.setsid (para manejar signals)
+      4. Inicia thread de monitoreo
+      5. Retorna True/False
+  
+  - stop_transmission()
+      1. Obtiene lock
+      2. Envía SIGTERM al grupo de procesos
+      3. Espera 3s (graceful shutdown)
+      4. Si aún está vivo: envía SIGKILL
+      5. Limpia referencias
+  
+  - start_reception(params) → bool
+      Similar a start_transmission pero con ffplay
+  
+  - stop_reception()
+      Similar a stop_transmission pero con ffplay
+  
+  - _monitor_tx() [ejecuta en thread]
+      Loop que cada 0.5s:
+      - Revisa if process.poll() != None (proceso terminó)
+      - Si terminó: limpia, actualiza flag, notifica
+  
+  - _monitor_rx() [ejecuta en thread]
+      Similar a _monitor_tx
+  
+  - is_transmitting() → bool
+      Verifica si transmit_process está vivo (thread-safe)
+  
+  - is_receiving() → bool
+      Verifica si receive_process está vivo (thread-safe)
+  
+  - cleanup()
+      Detiene ambos procesos al cerrar aplicación
+
+
+6.4 modules/profile_manager.py
+──────────────────────────────
+
+Clase: ProfileManager
+
+Responsabilidades:
+  - Cargar/guardar perfiles en JSON
+  - Proveer perfiles por defecto
+  - Gestionar múltiples perfiles
+
+Atributos:
+  - config_dir: Path al directorio de configuración
+  - config_file: Path a videoconf_profiles.json
+  - profiles: dict con perfiles cargados
+
+Métodos principales:
+  - __init__(config_dir="config")
+      Inicializa, crea dir si no existe, carga perfiles
+  
+  - _get_default_profiles() → dict
+      Retorna dict con 3 perfiles: cercano, medio, lejano
+  
+  - _load_profiles()
+      Lee JSON de disco, carga en self.profiles
+      Si no existe: crea con perfiles por defecto
+  
+  - _save_profiles() → bool
+      Escribe self.profiles a JSON
+  
+  - load_profile(profile_name) → dict
+      Retorna copia del perfil solicitado
+  
+  - save_profile(profile_name, params) → bool
+      Actualiza perfil en memory y guarda a disco
+  
+  - get_profile_names() → list
+      Retorna ["cercano", "medio", "lejano", ...]
+  
+  - delete_profile(profile_name) → bool
+      Borra un perfil
+  
+  - create_profile(profile_name, base_profile="medio") → bool
+      Crea nuevo perfil basado en uno existente
+
+
+6.5 modules/ui_components.py
+────────────────────────────
+
+Funciones reutilizables para UI:
+
+  - create_spin_field(layout, label, min, max, default) → QSpinBox
+      Crea un spinbox con label, lo agrega a layout
+  
+  - create_text_field(layout, label, default) → QLineEdit
+      Crea un textfield con label, lo agrega a layout
+  
+  - VideoWidget → QWidget
+      Widget para mostrar video (actualmente no usado, FFplay en ventana separada)
+
+
+================================================================================
+7. CONCEPTOS TÉCNICOS
+================================================================================
+
+7.1 MPEG-1 vs AAC
+─────────────────
+
+MPEG-1 Video:
+  - Codec de video antiguo pero ampliamente soportado
+  - Eficiente para UDP (tolerante a pérdidas)
+  - Tamaño de frame predecible
+  - Ideal para streaming UDP (vs TCP más overhead)
+
+AAC Audio:
+  - Codec de audio moderno (MPEG-4 Part 3)
+  - Mejor compresión que MP3
+  - Soportado en FFplay
+  - Bitrate típico: 64-128 kbps
+
+
+7.2 UDP vs TCP
+──────────────
+
+UDP (usado en esta app):
+  ✓ Más rápido (no espera confirmación)
+  ✓ Menor latencia
+  ✓ Para video/audio en vivo (tolerante a pérdidas)
+  ✗ No garantiza entrega
+  ✗ No garantiza orden
+  → Ideal para videoconferencia en tiempo real
+
+TCP:
+  ✓ Garantiza entrega
+  ✓ Mantiene orden de paquetes
+  ✗ Más lento (overhead de confirmación)
+  ✗ Mayor latencia
+  → Ideal para transferencia de archivos
+
+
+7.3 MPEGTS (MPEG Transport Stream)
+───────────────────────────────────
+
+Formato usado en ffmpeg → udp:
+  - Encapsula MPEG-1 video + AAC audio
+  - Agrega información de sincronización
+  - Permite FFplay decodificar correctamente
+  - Tolerante a pérdidas de paquetes
+
+
+7.4 THREADING Y LOCKS
+─────────────────────
+
+¿Por qué se usan threads?
+  - FFmpeg/FFplay son procesos que "bloquean" (esperan IO)
+  - Si no los ejecutamos en thread: UI se congela
+  - Solución: threads separados para TX/RX monitoring
+
+Locks (mutex):
+  - threading.Lock() previene race conditions
+  - Ejemplo:
+    ```python
+    with self.tx_lock:  # solo un thread a la vez
+        if self.transmit_process is None:
+            self.transmit_process = Popen(...)
+    ```
+
+
+7.5 SEÑALES (SIGNALS) EN LINUX
+──────────────────────────────
+
+SIGTERM:
+  - Señal de terminación "amable"
+  - El proceso puede limpiar recursos
+  - Ideal para shutdown graceful
+  - FFmpeg puede serializar estado si necesita
+
+SIGKILL:
+  - Terminación "forzada"
+  - El kernel mata el proceso inmediatamente
+  - Último recurso si SIGTERM no funciona
+  - Puede causar archivos corruptos
+
+En la app:
+  1. Envía SIGTERM al grupo de procesos
+  2. Espera 3 segundos
+  3. Si sigue vivo: envía SIGKILL
+
+
+7.6 PREEXEC_FN EN SUBPROCESS
+──────────────────────────────
+
+preexec_fn=os.setsid:
+  - Crea nuevo "process group" (PGID)
+  - Permite matar proceso + hijos con una sola señal
+  - Ejemplo:
+    ```python
+    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+    ```
+
+
+================================================================================
+8. CASOS DE USO Y LIMITACIONES
+================================================================================
+
+8.1 CASOS DE USO SOPORTADOS
+───────────────────────────
+
+✓ Videoconferencia P2P local (hotspot WiFi)
+✓ Pruebas de calidad de video a diferentes distancias
+✓ Educación: demostración de streaming en vivo
+✓ Investigación: análisis de FFmpeg/UDP
+✓ Prototipado: base para aplicación más compleja
+
+
+8.2 LIMITACIONES CONOCIDAS
+──────────────────────────
+
+✗ NO soporta más de 2 participantes simultáneamente
+  → Solo P2P, no multicast implementado
+
+✗ Dispositivos de video/audio fijos en UI
+  → No detecta automáticamente nuevos dispositivos
+
+✗ FFplay abre en ventana separada (no embebida)
+  → Intentos anteriores de VLC embedding descartados
+
+✗ Sin encriptación
+  → Cualquiera en la red puede escuchar
+
+✗ Sin sincronización de reloj
+  → Audio/video pueden desincronizarse en conexiones largas
+
+✗ Perfil no se selecciona automáticamente
+  → Usuario debe cambiar manualmente según distancia
+
+✗ Sin estadísticas de red (jitter, pérdida de paquetes)
+  → Difícil diagnosticar problemas de conexión
+
+
+================================================================================
+9. SOLUCIÓN DE PROBLEMAS (TROUBLESHOOTING)
+================================================================================
+
+9.1 "FFmpeg/FFplay no encontrado"
+────────────────────────────────
+
+Síntoma:
+  "FileNotFoundError: [Errno 2] No such file or directory: 'ffmpeg'"
+
+Causa:
+  FFmpeg no está instalado o no está en PATH
+
+Solución:
+  1. Instalar:
+     $ sudo apt install ffmpeg
+  2. Verificar instalación:
+     $ which ffmpeg
+     $ which ffplay
+  3. Si aún no funciona: agregar PATH:
+     $ export PATH=$PATH:/usr/bin
+
+
+9.2 "Video no se muestra en RX"
+────────────────────────────────
+
+Síntomas:
+  - Ventana FFplay abre pero pantalla negra
+  - O FFplay no abre en absoluto
+
+Causas posibles:
+  1. TX no está transmitiendo (error en ffmpeg)
+  2. Direcciones UDP incorrectas
+  3. Firewall bloqueando puerto 39400
+  4. Problema con dispositivo de video (/dev/video0)
+
+Diagnóstico:
+  [PC TX] Verificar console: ¿dice "ffmpeg: frame=123"?
+  [PC RX] Verificar console: ¿dice "Recepción iniciada"?
+  [PC RX] ¿FFplay abre ventana (aunque sea negra)?
+
+Soluciones:
+  1. Probar manualmente en terminal:
+     [PC A] ffplay udp://@:39400
+     [PC B] (en otra terminal) echo "test" | nc -u 192.168.127.1 39400
+  
+  2. Desactivar firewall temporalmente:
+     $ sudo ufw disable
+     (Reactivar después: $ sudo ufw enable)
+  
+  3. Verificar dispositivo de video:
+     $ ls -l /dev/video*
+     $ v4l2-ctl --device=/dev/video0 --list-formats
+  
+  4. Probar TX con dispositivo diferente:
+     /dev/video1, /dev/video2, etc.
+
+
+9.3 "Audio no funciona"
+───────────────────────
+
+Síntomas:
+  - Video se muestra pero sin sonido
+
+Causas:
+  1. Dispositivo de audio incorrecto
+  2. Micrófono mutado o sin volumen
+  3. Altavoces desconectados o sin volumen
+
+Diagnóstico:
+  $ arecord -l    # listar dispositivos entrada
+  $ aplay -l      # listar dispositivos salida
+  $ alsamixer     # controlador de volumen
+
+Soluciones:
+  1. Probar dispositivo manualmente:
+     $ arecord -D hw:1,6 -d 5 test.wav
+     $ aplay test.wav
+  
+  2. Aumentar volumen:
+     $ alsamixer
+     (Navegar con flechas, [M] para desmutear)
+  
+  3. Verificar permisos de audio:
+     $ groups $USER   # ¿incluye 'audio'?
+     $ sudo usermod -aG audio $USER
+     $ newgrp audio   # aplicar inmediatamente
+  
+  4. Cambiar hw:X,Y en UI (donde X=card, Y=device)
+
+
+9.4 "TX se detiene después de X segundos"
+──────────────────────────────────────────
+
+Síntomas:
+  - TX inicia correctamente
+  - Después de algunos segundos: "⚠️ Proceso de transmisión terminado"
+
+Causas:
+  1. Dispositivo de video se desconectó
+  2. FFmpeg no puede escribir a UDP (error de red)
+  3. Falta de recursos (CPU/memoria)
+
+Diagnóstico:
+  $ ffmpeg -f v4l2 -i /dev/video0 -c:v mpeg1video -b:v 8000k \
+    -f mpegts udp://192.168.127.2:39400
+  
+  Observar mensaje de error en consola
+
+Soluciones:
+  1. Verificar dispositivo:
+     $ ffmpeg -f v4l2 -list_formats all -i /dev/video0
+  
+  2. Usar perfil "lejano" (menos bitrate):
+     - Reduce presión sobre CPU/red
+  
+  3. Reducir resolución en UI
+  
+  4. Verificar conectividad de red:
+     $ ping 192.168.127.2
+     $ nc -l -u -p 39400   # escuchar UDP en local
+
+
+9.5 "Hotspot no funciona"
+──────────────────────────
+
+Síntomas:
+  - $ nmcli dev wifi hotspot ... no responde
+  - O hotspot desaparece después de unos minutos
+
+Causas:
+  1. NetworkManager no está habilitado
+  2. Interfaz wlan0 no soporta hotspot
+  3. Controlador WiFi no soporta modo AP (Access Point)
+
+Diagnóstico:
+  $ nmcli --version
+  $ nmcli dev show wlan0 | grep CAPABILITIES
+  $ iw list   # ver modos soportados (AP = Access Point)
+
+Soluciones:
+  1. Habilitar NetworkManager:
+     $ sudo systemctl start NetworkManager
+     $ sudo systemctl enable NetworkManager
+  
+  2. Verificar que wlan0 existe y es inalámbrica:
+     $ ip link show wlan0
+     $ iwconfig   # o: iw dev
+  
+  3. Si wlan0 no existe:
+     - Verificar controlador: $ lsmod | grep wifi
+     - Plugging en USB WiFi adapter
+  
+  4. Alternativa: usar script setup_hotspot.sh
+     $ sudo ./setup_hotspot.sh wlan0
+
+
+9.6 "Pérdida de conexión durante prueba"
+─────────────────────────────────────────
+
+Síntomas:
+  - Imagen se pixela, congela o "buffering"
+  - Audio se interrumpe
+
+Causas:
+  1. Interferencia WiFi (otros dispositivos en 2.4GHz)
+  2. Distancia demasiada, señal débil
+  3. Bitrate demasiado alto para ancho de banda disponible
+
+Soluciones:
+  1. Cambiar canal WiFi:
+     $ sudo nmcli dev wifi hotspot ifname wlan0 ssid "videoconf" \
+       password "12345678" channel 11   # usar canal 11 en lugar de 6
+  
+  2. Usar perfil "lejano":
+     - Reduce bitrate → menos datos → más tolerancia a pérdidas
+  
+  3. Acercarse más al router
+  
+  4. Desactivar otros dispositivos WiFi cercanos
+  
+  5. Cambiar a banda 5GHz (si router lo soporta)
+     $ iw phy wlan0 info | grep Band
+
+
+================================================================================
+10. REFERENCIAS Y RECURSOS
+================================================================================
+
+10.1 DOCUMENTACIÓN OFICIAL
+──────────────────────────
+
+FFmpeg:
+  https://ffmpeg.org/documentation.html
+  https://ffmpeg.org/ffmpeg.html (comando ffmpeg)
+  https://ffmpeg.org/ffplay.html (comando ffplay)
+
+PyQt6:
+  https://www.riverbankcomputing.com/static/Docs/PyQt6/
+
+NetworkManager:
+  https://wiki.gnome.org/Projects/NetworkManager
+
+UDP en Linux:
+  man udp
+  man socket
+  man udp(7)
+
+10.2 HERRAMIENTAS ÚTILES
+────────────────────────
+
+Debugging de FFmpeg:
+  ffmpeg -v verbose -i /dev/video0 ...  # output verboso
+  
+Debugging de red:
+  tcpdump -i wlan0 -n udp port 39400    # ver paquetes UDP
+  netstat -u -l                          # ver puertos UDP abiertos
+  iperf3 -u ...                          # medir ancho de banda
+
+Monitoreo de sistema:
+  top / htop  (CPU, memoria)
+  iotop       (IO)
+  nethogs     (uso de red por aplicación)
+
+
+================================================================================
+11. CONCLUSIÓN
+================================================================================
+
+Esta aplicación demuestra:
+  ✓ Integración de FFmpeg con PyQt6
+  ✓ Streaming UDP en tiempo real
+  ✓ Gestión de procesos en threads separados
+  ✓ Configuración flexible mediante perfiles
+  ✓ Comunicación P2P sin servidor central
+
+Está diseñada para ser:
+  → Educativa: Entender cómo funciona streaming de video
+  → Modular: Fácil de extender (agregar más perfiles, codecs)
+  → Práctica: Funciona en hotspot WiFi estándar
+
+Futuras mejoras posibles:
+  - Soporte multicast (>2 participantes)
+  - Estadísticas de red en tiempo real
+  - Encriptación TLS/DTLS
+  - Detección automática de dispositivos
+  - Embebimiento de video en PyQt6 (VLC bindings)
+  - Recorderr de sesión
+  - Control de ancho de banda adaptativo
+
+
+================================================================================
+FIN DEL DOCUMENTO
+================================================================================
+
+Versión: 1.0
+Fecha: 2025
+Licencia: GPL v3
+
+Para reportar bugs o sugerencias:
+  - Revisar "Solución de Problemas" primero
+  - Ejecutar con -v verbose si es necesario
+  - Incluir: SO, versión de FFmpeg, mensajes de error exactos
