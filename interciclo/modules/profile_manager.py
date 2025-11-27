@@ -26,9 +26,6 @@ class ProfileManager:
         """Obtener perfiles por defecto"""
         return {
             "cercano": {
-                "fps_entrada": 30,
-                "fps_salida": 30,
-                "gop": 30,
                 "width": 1920,
                 "height": 1080,
                 "video_bitrate": 8000,
@@ -36,9 +33,7 @@ class ProfileManager:
                 "muestras": 48000
             },
             "medio": {
-                "fps_entrada": 25,
-                "fps_salida": 25,
-                "gop": 50,
+
                 "width": 1280,
                 "height": 720,
                 "video_bitrate": 4000,
@@ -46,9 +41,7 @@ class ProfileManager:
                 "muestras": 44100
             },
             "lejano": {
-                "fps_entrada": 20,
-                "fps_salida": 15,
-                "gop": 60,
+
                 "width": 854,
                 "height": 480,
                 "video_bitrate": 1500,

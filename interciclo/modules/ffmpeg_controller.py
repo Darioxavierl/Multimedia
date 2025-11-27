@@ -34,7 +34,7 @@ class FFmpegController:
         self.tx_monitor_thread = None
         self.rx_monitor_thread = None
         
-        print(f"✅ FFmpegController inicializado - usando {self.player_type} (con threading)")
+        print(f"FFmpegController inicializado - usando {self.player_type} (con threading)")
     
     def set_player_type(self, player_type):
         """
@@ -69,7 +69,7 @@ class FFmpegController:
             "ffmpeg",
             # --- VIDEO INPUT ---
             "-f", params['controlador'],
-            "-framerate", str(params['fps_entrada']),
+            #"-framerate", str(params['fps_entrada']),
             "-video_size", f"{params['width']}x{params['height']}",
             "-i", params['video_device'],
             # --- AUDIO INPUT ---
@@ -160,7 +160,7 @@ class FFmpegController:
                     stdin=subprocess.DEVNULL,
                     preexec_fn=os.setsid
                 )
-                print(f"✅ Transmisión iniciada (PID: {self.transmit_process.pid})")
+                print(f"Transmisión iniciada (PID: {self.transmit_process.pid})")
                 
                 # Iniciar monitoreo en hilo separado
                 self._start_tx_monitoring()
@@ -189,7 +189,7 @@ class FFmpegController:
                 if self.transmit_process.poll() is not None:
                     # Proceso terminado
                     self.tx_monitoring = False
-                    print("⚠️  Proceso de transmisión terminado inesperadamente")
+                    print("Proceso de transmisión terminado inesperadamente")
                     with self.tx_lock:
                         self.transmit_process = None
                     break
@@ -259,7 +259,7 @@ class FFmpegController:
                     stdin=subprocess.DEVNULL,
                     preexec_fn=os.setsid
                 )
-                print(f"✅ Recepción iniciada (PID: {self.receive_process.pid})")
+                print(f"Recepción iniciada (PID: {self.receive_process.pid})")
                 print("   FFplay se abrirá en una ventana separada")
                 
                 # Iniciar monitoreo en hilo separado
@@ -289,7 +289,7 @@ class FFmpegController:
                 if self.receive_process.poll() is not None:
                     # Proceso terminado
                     self.rx_monitoring = False
-                    print("⚠️  Proceso de recepción terminado")
+                    print("Proceso de recepción terminado")
                     with self.rx_lock:
                         self.receive_process = None
                     break

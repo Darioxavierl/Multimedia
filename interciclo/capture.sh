@@ -4,10 +4,10 @@
 # Mide: Throughput, Delay (de análisis posterior)
 #
 # Uso:
-#   ./capture_experiment.sh <INTERFAZ> <PUERTO> <DURACION_SEG>
+#   ./capture.sh <INTERFAZ> <PUERTO> <DURACION_SEG>
 #
 # Ejemplo:
-#   ./capture_experiment.sh eth0 5000 120
+#   ./capture.sh eth0 5000 120
 #
 
 ### ================================

@@ -70,7 +70,7 @@ class VideoConferenceApp(QMainWindow):
         profile_layout.addWidget(QLabel("Perfil:"))
         profile_layout.addWidget(self.profile_combo)
         
-        save_btn = QPushButton("💾 Guardar")
+        save_btn = QPushButton("Guardar")
         save_btn.clicked.connect(self.save_current_profile)
         save_btn.setStyleSheet("padding: 5px;")
         profile_layout.addWidget(save_btn)
@@ -80,7 +80,7 @@ class VideoConferenceApp(QMainWindow):
         # Selector de reproductor de video - REMOVIDO: Solo FFplay
         # VLC fue removido para simplificar la arquitectura
         
-        info_label = QLabel("ℹ️ FFplay abrirá en ventana externa")
+        info_label = QLabel("ℹFFplay abrirá en ventana externa")
         info_label.setStyleSheet("background-color: #f0f0f0; padding: 5px; border-radius: 3px;")
         layout.addWidget(info_label)
         
@@ -109,9 +109,9 @@ class VideoConferenceApp(QMainWindow):
         video_tab = QWidget()
         video_layout = QVBoxLayout(video_tab)
         
-        self.params['fps_entrada'] = create_spin_field(video_layout, "FPS Entrada:", 1, 120, 30)
-        self.params['fps_salida'] = create_spin_field(video_layout, "FPS Salida:", 1, 120, 30)
-        self.params['gop'] = create_spin_field(video_layout, "GOP:", 1, 300, 30)
+        #self.params['fps_entrada'] = create_spin_field(video_layout, "FPS Entrada:", 1, 120, 30)
+        #self.params['fps_salida'] = create_spin_field(video_layout, "FPS Salida:", 1, 120, 30)
+        #self.params['gop'] = create_spin_field(video_layout, "GOP:", 1, 300, 30)
         self.params['width'] = create_spin_field(video_layout, "Ancho:", 320, 3840, 1920)
         self.params['height'] = create_spin_field(video_layout, "Alto:", 240, 2160, 1080)
         self.params['video_device'] = create_text_field(video_layout, "Dispositivo Video:", "/dev/video0")
@@ -127,7 +127,7 @@ class VideoConferenceApp(QMainWindow):
         
         self.params['canales_audio_input'] = create_spin_field(audio_layout, "Canales Input:", 1, 8, 2)
         self.params['canales_audio_output'] = create_spin_field(audio_layout, "Canales Output:", 1, 8, 2)
-        self.params['audio_codec'] = create_text_field(audio_layout, "Codec Audio:", "aac")
+        self.params['audio_codec'] = create_text_field(audio_layout, "Codec Audio:", "mp3")
         self.params['audio_device'] = create_text_field(audio_layout, "Dispositivo Audio:", "hw:1,6")
         self.params['audio_bitrate'] = create_spin_field(audio_layout, "Bitrate Audio (kbps):", 1, 512, 128)
         self.params['muestras'] = create_spin_field(audio_layout, "Sample Rate (Hz):", 8000, 96000, 48000)
@@ -140,9 +140,9 @@ class VideoConferenceApp(QMainWindow):
         red_layout = QVBoxLayout(red_tab)
         
         self.params['protocolo'] = create_text_field(red_layout, "Protocolo:", "mpegts")
-        self.params['direccion_tx'] = create_text_field(red_layout, "Dirección TX:", "udp://192.168.1.100:39400")
+        self.params['direccion_tx'] = create_text_field(red_layout, "Dirección TX:", "udp://10.42.0.48:39400")
         self.params['direccion_rx'] = create_text_field(red_layout, "Dirección RX:", "udp://@:39400")
-        self.params['probesize'] = create_text_field(red_layout, "Probesize:", "32")
+        self.params['probesize'] = create_text_field(red_layout, "Probesize:", "32000")
         
         red_layout.addStretch()
         tabs.addTab(red_tab, "Red")
@@ -187,22 +187,19 @@ class VideoConferenceApp(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)  # Sin márgenes
         layout.setSpacing(0)                    # Sin espacios
         
-        self.video_label = QLabel("🎥 Video Recibido (VLC embebido):")
+        self.video_label = QLabel("Video Recibido (VLC embebido):")
         self.video_label.setStyleSheet("padding: 5px; background-color: #333; color: white; font-weight: bold;")
         layout.addWidget(self.video_label)
         
-        # CRÍTICO: El VideoWidget debe tomar TODOS los espacios disponibles
+        
         self.video_widget = VideoWidget()
-        layout.addWidget(self.video_widget, 1)  # Stretch factor = 1 (toma todo espacio sobrante)
+        layout.addWidget(self.video_widget, 1) 
         
         # Asegurar que el panel también se expande
         panel.setStyleSheet("background-color: black;")
         
         return panel
     
-    def change_player(self, player_text):
-        """DEPRECATED - Solo FFplay está disponible"""
-        pass
     
     def get_current_params(self):
         """Obtener parámetros actuales de la UI"""
@@ -236,9 +233,9 @@ class VideoConferenceApp(QMainWindow):
         
         # Guardar solo los parámetros relevantes del perfil
         profile_params = {
-            'fps_entrada': params['fps_entrada'],
-            'fps_salida': params['fps_salida'],
-            'gop': params['gop'],
+            #'fps_entrada': params['fps_entrada'],
+            #'fps_salida': params['fps_salida'],
+            #'gop': params['gop'],
             'width': params['width'],
             'height': params['height'],
             'video_bitrate': params['video_bitrate'],
