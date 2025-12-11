@@ -1,7 +1,7 @@
 #!/bin/bash
 
 VIDEOS_DIR="${1:-./videos}"
-DISTANCE="${2:-80}"
+DISTANCE="${2:-70}"
 VIDEO_NAME="${3:-mobile_cif}"
 
 # Convertir ruta relativa a absoluta si es necesario
