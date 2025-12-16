@@ -1,0 +1,16 @@
+
+services:
+  samba:
+    image: dperson/samba # no hay tag con versiones, solo latest
+    container_name: samba
+    command: '-u "evalvid;evalvid" -s "Transmisor;/Transmisor;yes;no" -p'
+    stdin_open: true
+    tty: true
+    environment:
+      - TZ=America/Bogota
+    ports:
+      - 139:139
+      - 445:445
+    volumes:
+      - ./Tx:/Transmisor
+
