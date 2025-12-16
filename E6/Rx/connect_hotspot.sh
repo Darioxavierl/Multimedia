@@ -114,6 +114,16 @@ fi
 
 echo -e "${GREEN}✓ IP asignada: $IP_ADDR${NC}"
 
+# Obtener la puerta de enlace (Tx) automáticamente si no está configurada
+if [ -z "$SERVER_IP" ] || [ "$SERVER_IP" == "192.168.12.1" ]; then
+    echo -e "${BLUE}→ Detectando servidor Tx automáticamente...${NC}"
+    DETECTED_GATEWAY=$(ip route show dev "$INTERFACE" 2>/dev/null | grep "default via" | awk '{print $3}')
+    if [ -n "$DETECTED_GATEWAY" ]; then
+        SERVER_IP="$DETECTED_GATEWAY"
+        echo -e "${GREEN}✓ Servidor Tx detectado: $SERVER_IP${NC}"
+    fi
+fi
+
 # --------------------------------------------------
 # 2. Verificar reachability del servidor
 # --------------------------------------------------
@@ -138,41 +148,102 @@ fi
 
 # Detener chronyd si estaba corriendo
 echo -e "${BLUE}→ Deteniendo instancia anterior de chronyd...${NC}"
+systemctl stop chrony 2>/dev/null || true
 pkill chronyd 2>/dev/null || true
-systemctl stop chronyd 2>/dev/null || true
 sleep 1
 
+# Crear directorio de logs si no existe
+mkdir -p /tmp/chrony_rx_logs 2>/dev/null || true
+
 # Preparar configuración con la IP del servidor
-sed "s/TX_IP/$SERVER_IP/g" config/chrony_rx.conf > /tmp/chrony_rx_runtime.conf
+echo -e "${BLUE}→ Configurando Chrony como cliente...${NC}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CHRONY_CONF_TEMPLATE="$SCRIPT_DIR/config/chrony_rx.conf"
 
-# Iniciar chronyd como cliente con la configuración generada
-echo -e "${BLUE}→ Iniciando chronyd como cliente...${NC}"
-chronyd -f /tmp/chrony_rx_runtime.conf
+if [ ! -f "$CHRONY_CONF_TEMPLATE" ]; then
+    echo -e "${RED}✗ Archivo no encontrado: $CHRONY_CONF_TEMPLATE${NC}"
+    exit 1
+fi
 
-# Esperar a que inicie con timeout
+# Generar configuración dinámica reemplazando TX_IP
+sed "s/TX_IP/$SERVER_IP/g" "$CHRONY_CONF_TEMPLATE" | grep -v "^$" | grep -v "^[[:space:]]*$" > /tmp/chrony_rx_runtime.conf
+
+# Verificar que se generó correctamente
+if [ ! -f "/tmp/chrony_rx_runtime.conf" ] || [ ! -s "/tmp/chrony_rx_runtime.conf" ]; then
+    echo -e "${RED}✗ Error al generar configuración temporal${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Configuración generada: /tmp/chrony_rx_runtime.conf${NC}"
+grep "server" /tmp/chrony_rx_runtime.conf
+
+# Mostrar el contenido generado para debugging
+echo -e "${BLUE}→ Contenido de la configuración (lineas significativas):${NC}"
+cat /tmp/chrony_rx_runtime.conf | nl
+
+# Respaldar y copiar configuración al sistema
+if [ -f "/etc/chrony/chrony.conf" ]; then
+    echo -e "${BLUE}→ Instalando configuración personalizada de Chrony...${NC}"
+    cp /etc/chrony/chrony.conf /etc/chrony/chrony.conf.backup 2>/dev/null
+    # Crear un archivo limpio sin el contenido original
+    cat /tmp/chrony_rx_runtime.conf > /etc/chrony/chrony.conf
+    
+    # Verificar permisos
+    chmod 644 /etc/chrony/chrony.conf 2>/dev/null || true
+    
+    # Verificar que se copió correctamente
+    echo -e "${BLUE}→ Verificando archivo final en /etc/chrony/chrony.conf:${NC}"
+    wc -l /etc/chrony/chrony.conf
+    cat /etc/chrony/chrony.conf | nl
+fi
+
+# Iniciar Chrony con systemctl
+echo -e "${BLUE}→ Iniciando Chrony como cliente...${NC}"
+if systemctl start chrony 2>/dev/null; then
+    sleep 2
+    echo -e "${GREEN}✓ Chrony iniciado${NC}"
+else
+    echo -e "${RED}✗ Error al iniciar Chrony con systemctl${NC}"
+    echo -e "${YELLOW}→ Intentando diagnóstico...${NC}"
+    systemctl status chrony 2>&1 | head -20
+    echo ""
+    echo -e "${YELLOW}Contenido del archivo /etc/chrony/chrony.conf:${NC}"
+    cat /etc/chrony/chrony.conf | nl | head -30
+    echo ""
+    echo -e "${YELLOW}Posibles soluciones:${NC}"
+    echo "  1. Revisa la línea 22 del archivo de configuración"
+    echo "  2. Instala Chrony: sudo apt-get install chrony"
+    echo "  3. Revisa logs: sudo journalctl -u chrony -n 20"
+    echo ""
+    echo "Comando para depuración:"
+    echo "  sudo chronyd -f /etc/chrony/chrony.conf 2>&1 | head -20"
+    exit 1
+fi
+
+# Esperar a que sincronice (con timeout)
+echo -e "${BLUE}→ Esperando sincronización (${CHRONY_START_TIMEOUT}s)...${NC}"
 ELAPSED=0
 while [ $ELAPSED -lt $CHRONY_START_TIMEOUT ]; do
-    if chronyc tracking &>/dev/null; then
+    if chronyc tracking > /dev/null 2>&1; then
         break
     fi
     sleep 1
     ELAPSED=$((ELAPSED + 1))
 done
 
-# Prueba básica
+# Verificar estado
 echo -e "${BLUE}→ Verificando estado de Chrony...${NC}"
 
-if chronyc tracking &>/dev/null; then
+if chronyc tracking > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Chrony operativo${NC}"
     chronyc tracking
 else
-    echo -e "${RED}✗ Chrony no responde${NC}"
-    exit 1
+    echo -e "${YELLOW}⚠ Chrony aún no sincronizado, continuando...${NC}"
 fi
 
 # Mostrar fuentes de sincronización
 echo ""
-chronyc sources -v
+chronyc sources -v 2>/dev/null || echo "⚠ Fuentes de sincronización no disponibles aún"
 
 # --------------------------------------------------
 # 4. Estado final

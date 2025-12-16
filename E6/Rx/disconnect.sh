@@ -27,13 +27,19 @@ fi
 
 INTERFACE="${WIFI_INTERFACE:-wlan0}"
 
-# Detener Chrony
+# Detener Chrony y restaurar configuración original
 echo -e "${BLUE}→ Deteniendo Chrony...${NC}"
+systemctl stop chrony 2>/dev/null || true
 pkill chronyd 2>/dev/null || true
-systemctl stop chronyd 2>/dev/null || true
-if [ $? -eq 0 ] || [ $? -eq 1 ]; then
-    echo -e "${GREEN}✓ Chrony detenido${NC}"
+
+# Restaurar configuración original
+if [ -f "/etc/chrony/chrony.conf.backup" ]; then
+    echo -e "${BLUE}→ Restaurando configuración original de Chrony...${NC}"
+    cp /etc/chrony/chrony.conf.backup /etc/chrony/chrony.conf
+    echo -e "${GREEN}✓ Configuración restaurada${NC}"
 fi
+
+echo -e "${GREEN}✓ Chrony detenido${NC}"
 
 # Desconectar del hotspot
 echo -e "${BLUE}→ Desconectando de $HOTSPOT_SSID...${NC}"

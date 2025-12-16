@@ -5,7 +5,7 @@
 #
 # Requisitos:
 #   - Archivo .env en el mismo directorio con la configuración
-#   - dnsmasq instalado para DHCP
+#   - NetworkManager para crear hotspot (DHCP automático)
 #
 # Uso:
 #   ./create_hotspot.sh
@@ -72,26 +72,53 @@ if ! command -v chronyd &>/dev/null; then
     exit 1
 fi
 
-# Detener chronyd si estaba corriendo (systemctl o instancia anterior)
+# Detener chronyd si estaba corriendo
 echo -e "${BLUE}→ Deteniendo instancia anterior de chronyd...${NC}"
+systemctl stop chrony 2>/dev/null || true
 pkill chronyd 2>/dev/null || true
-systemctl stop chronyd 2>/dev/null || true
 sleep 1
 
-# Iniciar chronyd como servidor con la configuración específica de Tx
-echo -e "${BLUE}→ Iniciando chronyd como servidor (Tx)...${NC}"
-chronyd -f config/chrony_tx.conf
+# Configurar Chrony como servidor con la configuración específica de Tx
+echo -e "${BLUE}→ Configurando Chrony como servidor (Tx)...${NC}"
 
-# Espera breve para que el daemon esté listo
-sleep 2
+# Ruta absoluta al config de Chrony
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CHRONY_CONF="$SCRIPT_DIR/config/chrony_tx.conf"
+
+if [ ! -f "$CHRONY_CONF" ]; then
+    echo -e "${RED}✗ Archivo no encontrado: $CHRONY_CONF${NC}"
+    exit 1
+fi
+
+# Respaldar configuración original y copiar la nueva
+if [ -f "/etc/chrony/chrony.conf" ]; then
+    echo -e "${BLUE}→ Instalando configuración personalizada de Chrony...${NC}"
+    cp /etc/chrony/chrony.conf /etc/chrony/chrony.conf.backup 2>/dev/null
+    cp "$CHRONY_CONF" /etc/chrony/chrony.conf
+else
+    echo -e "${YELLOW}⚠ /etc/chrony/chrony.conf no encontrado, usando configuración alternativa${NC}"
+fi
+
+# Iniciar Chrony con systemctl
+echo -e "${BLUE}→ Iniciando Chrony...${NC}"
+if systemctl start chrony 2>/dev/null; then
+    sleep 2
+else
+    echo -e "${RED}✗ No se pudo iniciar Chrony con systemctl${NC}"
+    echo -e "${YELLOW}Intenta instalarlo: sudo apt-get install chrony${NC}"
+    exit 1
+fi
 
 # Prueba básica
-if chronyc tracking &>/dev/null; then
+if chronyc tracking > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Chrony operativo como servidor${NC}"
     chronyc tracking
 else
-    echo -e "${RED}✗ Chrony no responde${NC}"
-    exit 1
+    echo -e "${RED}✗ Chrony no responde después de 2 segundos${NC}"
+    echo -e "${YELLOW}→ Revisando estado...${NC}"
+    systemctl status chrony 2>/dev/null || echo "Estado de chrony no disponible"
+    echo -e "${YELLOW}Espera unos segundos e intenta nuevamente: chronyc tracking${NC}"
+    # No salir, permitir continuar con el hotspot
 fi
 
 # --------------------------------------------------
@@ -107,64 +134,26 @@ echo ""
 
 echo "→ Deteniendo posibles conexiones previas..."
 nmcli device disconnect "$INTERFACE" 2>/dev/null || true
+sleep 1
 
 echo "→ Iniciando hotspot..."
-nmcli dev wifi hotspot ifname "$INTERFACE" ssid "$SSID" password "$PASSWORD"
+nmcli dev wifi hotspot ifname "$INTERFACE" ssid "$SSID" password "$PASSWORD" 2>&1
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Hotspot creado correctamente${NC}"
+    sleep 2  # Esperar a que NetworkManager asigne IP
 else
     echo -e "${RED}✗ Error al crear el hotspot${NC}"
+    echo "Verificando estado de NetworkManager..."
+    nmcli device status
     exit 1
 fi
 
-# Esperar a que la interfaz esté lista
-sleep 2
+# Mostrar IP asignada automáticamente por NetworkManager
+echo -e "${BLUE}→ IP asignada por NetworkManager:${NC}"
+ip addr show "$INTERFACE" | grep -E "inet |state" || true
 
-# Configurar IP estática en la interfaz
-echo "→ Configurando IP estática en $INTERFACE: $GATEWAY_IP/$NETWORK_MASK..."
-ip addr add "$GATEWAY_IP/$NETWORK_MASK" dev "$INTERFACE" 2>/dev/null || \
-ip addr replace "$GATEWAY_IP/$NETWORK_MASK" dev "$INTERFACE"
-
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✓ IP configurada${NC}"
-else
-    echo -e "${RED}✗ Error al configurar IP${NC}"
-    exit 1
-fi
-
-# Configurar DHCP si dnsmasq está disponible
-echo "→ Configurando servidor DHCP..."
-if command -v dnsmasq &>/dev/null; then
-    # Crear configuración temporal de dnsmasq
-    DNSMASQ_CONF="/tmp/dnsmasq_hotspot.conf"
-    cat > "$DNSMASQ_CONF" << EOF
-# Configuración de dnsmasq para hotspot
-interface=$INTERFACE
-dhcp-range=$DHCP_START,$DHCP_END,${NETWORK_MASK},$((DHCP_LEASE / 60))m
-dhcp-option=option:router,$GATEWAY_IP
-dhcp-option=option:dns-server,$GATEWAY_IP
-address=/#/$GATEWAY_IP
-EOF
-
-    # Detener dnsmasq anterior si existe
-    pkill dnsmasq 2>/dev/null || true
-    sleep 1
-
-    # Iniciar dnsmasq
-    dnsmasq -C "$DNSMASQ_CONF"
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ DHCP configurado correctamente${NC}"
-        echo "  Rango: $DHCP_START - $DHCP_END"
-        echo "  Gateway: $GATEWAY_IP"
-        echo "  Lease: $DHCP_LEASE segundos"
-    else
-        echo -e "${YELLOW}⚠ Error al iniciar dnsmasq, pero hotspot está activo${NC}"
-    fi
-else
-    echo -e "${YELLOW}⚠ dnsmasq no instalado. El hotspot está activo pero sin DHCP.${NC}"
-    echo "   Instala dnsmasq para habilitar DHCP: sudo apt install dnsmasq"
-fi
+echo -e "${GREEN}✓ Hotspot activo con DHCP automático${NC}"
 
 
 # --------------------------------------------------
@@ -186,14 +175,14 @@ echo ""
 
 # Mostrar información de la red
 echo -e "${GREEN}Configuración de red:${NC}"
-ip addr show "$INTERFACE" | grep "inet " || true
+ip addr show "$INTERFACE" | grep -E "inet |state" || true
 
 echo ""
 echo -e "${GREEN}✓ Chrony activo (servidor local)${NC}"
 echo -e "${GREEN}✓ Hotspot activo${NC}"
-echo -e "${GREEN}✓ DHCP activo (pool: $DHCP_START - $DHCP_END)${NC}"
+echo -e "${GREEN}✓ DHCP automático via NetworkManager${NC}"
 echo ""
 echo "Instrucciones para el Rx:"
-echo "  $0 wlan0 $SSID $PASSWORD $GATEWAY_IP"
+echo "  sudo ./Rx/connect_hotspot.sh"
 echo ""
 echo "Puedes ahora conectar el Rx y sincronizarlo."
