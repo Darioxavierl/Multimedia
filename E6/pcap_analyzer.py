@@ -276,6 +276,10 @@ def main():
         print(f"✗ Archivo no encontrado: {args.pcap_rx}")
         sys.exit(1)
     
+    # Mostrar parámetros recibidos para debug
+    print(f"DEBUG: ip_src={args.ip_src}, ip_dst={args.ip_dst}")
+    print(f"DEBUG: Buscando paquetes UDP de {args.ip_src}:{args.port} -> {args.ip_dst}:{args.port}\n")
+    
     # Ejecutar análisis
     analyzer = PCAPAnalyzer(args.pcap_tx, args.pcap_rx, args.ip_src, args.ip_dst, 
                            args.dump_tx, args.dump_rx, args.port)

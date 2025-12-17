@@ -80,20 +80,22 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Obtener interfaz de red activa
-INTERFACE=$(ip route | grep default | awk '{print $5}' | head -1)
-if [ -z "$INTERFACE" ]; then
-    echo -e "${RED}✗ No se encontró interfaz de red activa${NC}"
-    exit 1
-fi
+INTERFACE=wlp3s0
 
 echo -e "${BLUE}→ Iniciando captura en interfaz $INTERFACE...${NC}"
-echo "  Filtro: udp port $PUERTO"
 echo ""
 
-# Iniciar tcpdump en background
-tcpdump -i "$INTERFACE" -w "$PCAP_FILE" "udp port $PUERTO" 2>/dev/null &
+# Iniciar tcpdump en background sin filtro de puerto
+# Usando -U para flush inmediato y -n para no resolver DNS
+tcpdump -i "$INTERFACE" -w "$PCAP_FILE" -U 2>&1 &
 TCPDUMP_PID=$!
-sleep 1  # Esperar a que tcpdump inicie
+sleep 2  # Esperar a que tcpdump inicie correctamente
+
+# Verificar que tcpdump está corriendo
+if ! kill -0 $TCPDUMP_PID 2>/dev/null; then
+    echo -e "${RED}✗ Error: tcpdump falló al iniciar${NC}"
+    exit 1
+fi
 
 echo -e "${GREEN}✓ Captura iniciada (PID: $TCPDUMP_PID)${NC}"
 echo ""
@@ -105,10 +107,9 @@ echo "  Comando: $SEND_CMD"
 echo ""
 
 # Ejecutar mp4trace
-~/evalvid/mp4trace -f -s "$IP_DESTINO" $PUERTO "$VIDEO_PATH" > "$TRACE_FILE"
+/home/dariox/evalvid/mp4trace -f -s "$IP_DESTINO" $PUERTO "$VIDEO_PATH" > "$TRACE_FILE"
 SEND_EXIT_CODE=$?
 
-echo ""
 echo -e "${BLUE}→ Deteniendo captura...${NC}"
 
 # Detener tcpdump
@@ -117,12 +118,24 @@ wait $TCPDUMP_PID 2>/dev/null
 
 sleep 1
 
+# Debug: Mostrar estadísticas de tcpdump
+echo -e "${BLUE}→ Estadísticas de captura:${NC}"
+if [ -f "$PCAP_FILE" ]; then
+    PCAP_SIZE=$(ls -lh "$PCAP_FILE" | awk '{print $5}')
+    echo "  Tamaño archivo: $PCAP_SIZE"
+    echo "  Contenido PCAP:"
+    tcpdump -r "$PCAP_FILE" -c 5 2>/dev/null | head -10
+fi
+
 # Verificar que se crearon los archivos
 if [ -f "$PCAP_FILE" ]; then
     PCAP_SIZE=$(du -h "$PCAP_FILE" | awk '{print $1}')
-    echo -e "${GREEN}✓ PCAP capturado: $PCAP_FILE ($PCAP_SIZE)${NC}"
+    PCAP_PACKETS=$(tcpdump -r "$PCAP_FILE" 2>/dev/null | wc -l)
+    echo -e "${GREEN}✓ PCAP capturado: $PCAP_FILE ($PCAP_SIZE, $PCAP_PACKETS paquetes)${NC}"
 else
     echo -e "${RED}✗ Error: No se generó el PCAP${NC}"
+    echo "  Debug: Verificar permisos en ./PCAP/"
+    ls -la ./PCAP/
 fi
 
 if [ -f "$TRACE_FILE" ]; then

@@ -3,7 +3,7 @@ services:
   samba:
     image: dperson/samba # no hay tag con versiones, solo latest
     container_name: samba
-    command: '-u "evalvid;evalvid" -s "Transmisor;/Transmisor;yes;no" -p'
+    command: '-u "evalvid;evalvid" -s "Transmisor;/Transmisor;yes;no" -s "Receptor;/Receptor;yes;no" -p'
     stdin_open: true
     tty: true
     environment:
@@ -13,4 +13,5 @@ services:
       - 445:445
     volumes:
       - ./Tx:/Transmisor
+      - ./Rx:/Receptor
 

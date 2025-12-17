@@ -80,7 +80,9 @@ echo -e "${YELLOW}Starting video reconstruction...${NC}"
 echo "Command: ~/evalvid/etmp4 -f -0 $RX_DUMP $TRACE_FILE $ORIGINAL_VIDEO $OUTPUT_VIDEO"
 echo ""
 
-if ~/evalvid/etmp4 -f -0 "$RX_DUMP" "$TRACE_FILE" "$ORIGINAL_VIDEO" "$OUTPUT_VIDEO"; then
+cd Rx/videos_recontruidos || exit 1
+
+if ~/evalvid/etmp4 -f -0 "$TX_DUMP" "$RX_DUMP" "$TRACE_FILE" "$ORIGINAL_VIDEO" "$OUTPUT_VIDEO"; then
     echo ""
     echo -e "${GREEN}Video reconstruction completed successfully! ✓${NC}"
     echo -e "${GREEN}Output file: $OUTPUT_VIDEO${NC}"
