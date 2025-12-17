@@ -63,3 +63,10 @@ bash
 bash
  python3 ./psnr_new.py 40m
 ```
+
+# 5. Reproduccion de videos
+1. Para reproducir los videos:
+```
+bash
+./play_videos.sh ./76m/videos/100k
+``` 
