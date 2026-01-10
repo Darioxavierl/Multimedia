@@ -489,20 +489,20 @@ El directorio `www/html/segmentos/` es compartido entre:
 - **Backend**: Escribe los segmentos de video (FFmpeg)
 - **NGINX**: Sirve los segmentos al reproductor
 
-## 🔧 Endpoints de la API
+## Endpoints de la API
 
 - `GET /` - Información del servicio
 - `POST /api/stream/start` - Iniciar transmisión FFmpeg
 - `POST /api/stream/stop` - Detener transmisión FFmpeg
 - `GET /api/stream/status` - Estado de la transmisión
 
-## 📝 Requisitos
+## Requisitos
 
 - Docker y Docker Compose
 - Cámara web en `/dev/video0` (o modificar en `docker-compose.yml`)
 - Puertos 8000 y 8081 disponibles
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Error: "Cannot access /dev/video0"
 
@@ -523,13 +523,13 @@ Verifica los logs del backend:
 sudo docker compose logs backend
 ```
 
-## 🎯 Características
+##  Características
 
-- ✅ Streaming adaptativo DASH
-- ✅ Reproductor Shaka Player integrado
-- ✅ Control de transmisión desde interfaz web
-- ✅ Backend REST API en Python
-- ✅ Arquitectura modular (CSS, JS separados)
-- ✅ Volúmenes compartidos entre contenedores
-- ✅ Proxy reverso con NGINX
-- ✅ Solo 2 botones: Iniciar/Detener
+-  Streaming adaptativo DASH
+-  Reproductor Shaka Player integrado
+-  Control de transmisión desde interfaz web
+-  Backend REST API en Python
+-  Arquitectura modular (CSS, JS separados)
+-  Volúmenes compartidos entre contenedores
+-  Proxy reverso con NGINX
+-  Solo 2 botones: Iniciar/Detener
