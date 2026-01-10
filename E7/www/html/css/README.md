@@ -1,6 +1,6 @@
-# 🎨 Sistema de Variables CSS
+# Sistema de Variables CSS
 
-## 📁 Estructura
+## Estructura
 
 ```
 www/html/css/
@@ -8,47 +8,47 @@ www/html/css/
 └── styles.css     → Estilos que usan las variables
 ```
 
-## 🎯 Uso de Variables
+## Uso de Variables
 
 Todas las variables están definidas en `variables.css` y se usan en `styles.css`.
 
 ### Variables Principales
 
-#### 🎨 Colores Primarios
+####  Colores Primarios
 ```css
 --color-primary: #667eea;       /* Azul principal */
 --color-primary-dark: #764ba2;  /* Azul oscuro */
 --color-primary-light: #8b9dff; /* Azul claro */
 ```
 
-#### 🎨 Colores Secundarios
+####  Colores Secundarios
 ```css
 --color-secondary: #f093fb;     /* Rosa */
 --color-secondary-dark: #f5576c; /* Rosa oscuro */
 ```
 
-#### 📄 Fondos
+####  Fondos
 ```css
 --bg-main: #ffffff;        /* Fondo principal (blanco) */
 --bg-container: #f8f9fa;   /* Fondo de contenedores */
 --bg-dark: #000000;        /* Fondo oscuro (video) */
 ```
 
-#### 📝 Textos
+#### Textos
 ```css
 --text-primary: #333333;   /* Texto principal */
 --text-secondary: #555555; /* Texto secundario */
 --text-light: #ffffff;     /* Texto claro (botones) */
 ```
 
-#### ✅ Estados
+####  Estados
 ```css
 --color-success: #2e7d32;      /* Verde éxito */
 --color-error: #c33333;        /* Rojo error */
 --color-info: #1976d2;         /* Azul información */
 ```
 
-## 🔄 Cambiar Esquema de Colores
+##  Cambiar Esquema de Colores
 
 ### Opción 1: Editar variables.css directamente
 
@@ -80,7 +80,7 @@ En el `<body>` del HTML, agrega `data-theme`:
 <body data-theme="dark">
 ```
 
-## 🎨 Temas Disponibles
+##  Temas Disponibles
 
 ### 1. Tema por Defecto (Morado/Azul)
 - Color principal: `#667eea` (Azul)
@@ -109,7 +109,7 @@ En el `<body>` del HTML, agrega `data-theme`:
 - Textos claros
 - Colores ajustados para contraste
 
-## ✏️ Crear Tu Propio Tema
+##  Crear Tu Propio Tema
 
 1. Abre `www/html/css/variables.css`
 
@@ -137,7 +137,7 @@ En el `<body>` del HTML, agrega `data-theme`:
 <body data-theme="mi-tema">
 ```
 
-## 🎯 Variables de Espaciado
+##  Variables de Espaciado
 
 ```css
 --spacing-xs: 8px;   /* Extra pequeño */
@@ -147,7 +147,7 @@ En el `<body>` del HTML, agrega `data-theme`:
 --spacing-xl: 30px;  /* Extra grande */
 ```
 
-## 🎯 Variables de Bordes
+##  Variables de Bordes
 
 ```css
 --border-radius-sm: 5px;   /* Bordes pequeños */
@@ -156,7 +156,7 @@ En el `<body>` del HTML, agrega `data-theme`:
 --border-radius-xl: 25px;  /* Bordes extra grandes (botones) */
 ```
 
-## 🎯 Variables de Sombras
+##  Variables de Sombras
 
 ```css
 --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -165,7 +165,7 @@ En el `<body>` del HTML, agrega `data-theme`:
 --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.3);
 ```
 
-## 📝 Ejemplos de Cambios Rápidos
+##  Ejemplos de Cambios Rápidos
 
 ### Cambiar color de botones:
 ```css
@@ -187,23 +187,23 @@ En el `<body>` del HTML, agrega `data-theme`:
 --spacing-xl: 50px;  /* Más padding en contenedor */
 ```
 
-## 🔄 Aplicar Cambios
+##  Aplicar Cambios
 
 1. **Edita** `www/html/css/variables.css`
 2. **Guarda** el archivo
 3. **Recarga** la página (Ctrl+F5)
-4. ✅ **Listo!** Los cambios se aplican inmediatamente
+4. **Listo!** Los cambios se aplican inmediatamente
 
 No necesitas reconstruir contenedores ni ejecutar scripts. Solo recargar la página.
 
-## 💡 Tips
+## Tips
 
 - **Mantén consistencia**: Usa las variables en lugar de valores hardcoded
 - **Usa temas**: Crea temas para diferentes contextos
 - **Documenta cambios**: Si agregas variables nuevas, actualiza esta guía
 - **Prueba contrastes**: Asegúrate de que los colores sean legibles
 
-## 🎨 Generadores de Paletas Útiles
+## Generadores de Paletas Útiles
 
 - [Coolors](https://coolors.co/) - Generador de paletas
 - [Adobe Color](https://color.adobe.com/) - Rueda de colores
