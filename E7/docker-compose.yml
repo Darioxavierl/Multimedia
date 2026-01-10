@@ -1,0 +1,33 @@
+services:
+  backend:
+    build: ./backend
+    container_name: dash-backend
+    ports:
+      - "0.0.0.0:8000:8000"
+    volumes:
+      - ./www/html/segmentos:/var/www/html/segmentos
+      - ./backend:/app
+    devices:
+      - /dev/video0:/dev/video0
+    restart: unless-stopped
+    networks:
+      - dash-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-dash-server
+    ports:
+      - "0.0.0.0:8081:80"
+    volumes:
+      - ./www/html:/var/www/html
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - dash-network
+
+networks:
+  dash-network:
+    driver: bridge

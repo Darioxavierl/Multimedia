@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Streaming</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 10px;
+            background: #1a1a1a;
+            color: #fff;
+            font-size: 14px;
+        }
+        #console {
+            background: #0a0a0a;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 11px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 15px 25px;
+            margin: 5px;
+            font-size: 18px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            width: 100%;
+        }
+        video {
+            width: 100%;
+            max-width: 640px;
+            background: #000;
+            margin: 10px 0;
+        }
+        .status {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            background: #2d2d2d;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.9/shaka-player.compiled.js"></script>
+</head>
+<body>
+    <h2>Debug Shaka Player</h2>
+    
+    <div class="status">
+        <strong>Estado:</strong> <span id="status">Cargando...</span>
+    </div>
+
+    <button onclick="startStreaming()">Iniciar Transmisión</button>
+    
+    <video id="video" controls autoplay></video>
+    
+    <h3>Console Log</h3>
+    <div id="console"></div>
+
+    <script>
+        const video = document.getElementById('video');
+        let player = null;
+        
+        function log(msg) {
+            const console = document.getElementById('console');
+            const timestamp = new Date().toLocaleTimeString();
+            console.innerHTML += `<div>[${timestamp}] ${msg}</div>`;
+            console.scrollTop = console.scrollHeight;
+            window.console.log(msg);
+        }
+
+        function updateStatus(msg) {
+            document.getElementById('status').textContent = msg;
+            log('STATUS: ' + msg);
+        }
+
+        // Inicializar Shaka Player
+        if (shaka.Player.isBrowserSupported()) {
+            log('✓ Navegador soporta Shaka Player');
+            shaka.polyfill.installAll();
+            player = new shaka.Player(video);
+            
+            player.configure({
+                streaming: {
+                    bufferingGoal: 4,
+                    rebufferingGoal: 2,
+                    lowLatencyMode: true
+                }
+            });
+
+            player.addEventListener('error', (event) => {
+                log('❌ ERROR Shaka: ' + JSON.stringify(event.detail));
+            });
+            
+            updateStatus('Listo');
+        } else {
+            log('❌ Navegador NO soporta Shaka Player');
+            updateStatus('Navegador no compatible');
+        }
+
+        async function startStreaming() {
+            try {
+                updateStatus('Iniciando FFmpeg...');
+                
+                // Iniciar FFmpeg
+                const startResponse = await fetch('/api/stream/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const startData = await startResponse.json();
+                log('FFmpeg iniciado: ' + JSON.stringify(startData));
+                
+                // Esperar MPD
+                updateStatus('Esperando MPD...');
+                const mpdUrl = '/segmentos/video0.mpd';
+                log('Buscando MPD en: ' + mpdUrl);
+                
+                let found = false;
+                for (let i = 0; i < 40; i++) {
+                    try {
+                        const checkResponse = await fetch(mpdUrl, { method: 'HEAD' });
+                        log(`Intento ${i+1}: ${checkResponse.status}`);
+                        
+                        if (checkResponse.ok) {
+                            log('✓ MPD encontrado!');
+                            found = true;
+                            break;
+                        }
+                    } catch (e) {
+                        log(`Intento ${i+1} error: ${e.message}`);
+                    }
+                    await new Promise(r => setTimeout(r, 500));
+                }
+                
+                if (!found) {
+                    throw new Error('MPD no encontrado después de 20 segundos');
+                }
+                
+                // Esperar segmentos adicionales
+                updateStatus('Esperando segmentos...');
+                log('Esperando 4 segundos más para segmentos...');
+                await new Promise(r => setTimeout(r, 4000));
+                
+                // Cargar en Shaka
+                updateStatus('Cargando video...');
+                log('Cargando en Shaka Player: ' + mpdUrl);
+                
+                const fullUrl = window.location.origin + mpdUrl;
+                log('URL completa: ' + fullUrl);
+                
+                await player.load(fullUrl);
+                log('✓ Video cargado exitosamente!');
+                updateStatus('Transmitiendo');
+                
+            } catch (error) {
+                log('❌ ERROR: ' + error.message);
+                log('Stack: ' + error.stack);
+                updateStatus('Error: ' + error.message);
+            }
+        }
+
+        // Logs iniciales
+        log('Base URL: ' + window.location.origin);
+        log('User Agent: ' + navigator.userAgent);
+    </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reproductor DASH Adaptativo</title>
+    <!-- Shaka Player CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.9/shaka-player.compiled.js"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-theme="dark">
+    <div class="container">
+        <h1>Reproductor de Video Adaptativo DASH</h1>
+        
+        <div class="video-container">
+            <video id="video" 
+                   poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='450'%3E%3Crect fill='%23222' width='800' height='450'/%3E%3Ctext fill='%23fff' font-size='30' font-family='Arial' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EReproductor DASH%3C/text%3E%3C/svg%3E"
+                   controls 
+                   autoplay>
+            </video>
+        </div>
+
+        <div class="controls">
+            <button id="startStreamBtn">▶️ Iniciar Transmisión</button>
+            <button id="stopStreamBtn" class="stop-btn" disabled>⏹️ Detener Transmisión</button>
+        </div>
+
+        <div class="status">
+            <div class="status-item">
+                <span class="status-label">Estado:</span>
+                <span class="status-value" id="streamStatus">Detenido</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Calidad:</span>
+                <span class="status-value" id="qualityInfo">-</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Buffer:</span>
+                <span class="status-value" id="bufferInfo">-</span>
+            </div>
+        </div>
+
+        <div class="info">
+            <strong>Información:</strong> Presiona "Iniciar Transmisión" para comenzar a capturar y transmitir video desde la cámara.
+        </div>
+
+        <div class="success" id="successDisplay"></div>
+        <div class="error" id="errorDisplay"></div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

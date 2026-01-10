@@ -1,0 +1,36 @@
+        #  CONFIGURACIÓN ULTRA RÁPIDA - backend/main.py
+        # Latencia: ~1.5-2 segundos | Cortes: Posibles en red lenta
+        command = [
+            "ffmpeg",
+            "-y",
+            "-f", "v4l2",
+            "-video_size", "1280x720",
+            "-framerate", "25",
+            "-i", "/dev/video0",
+            "-vcodec", "libx264",
+            "-preset", "ultrafast",
+            "-tune", "zerolatency",
+            "-keyint_min", "1",
+            "-g", "8",                        #  GOP más corto
+            "-sc_threshold", "0",
+            "-b:v", "1000k",
+            "-maxrate", "1000k",
+            "-bufsize", "1500k",              #  Buffer más pequeño
+            "-pix_fmt", "yuv420p",
+            "-map", "0:v",
+            "-f", "dash",
+            "-seg_duration", "0.75",          #  Segmentos muy cortos
+            "-frag_duration", "0.75",
+            "-use_template", "1",
+            "-use_timeline", "0",
+            "-init_seg_name", "init-$RepresentationID$.mp4",
+            "-profile:v", "baseline",
+            "-media_seg_name", "video-$RepresentationID$-$Number$.mp4",
+            "-remove_at_exit", "1",
+            "-window_size", "3",              #  Menos segmentos
+            "-extra_window_size", "1",        #  Mínimo respaldo
+            "-ldash", "1",
+            "-streaming", "1",
+            "-target_latency", "1.5",         #  Target bajo
+            MPD_FILE
+        ]

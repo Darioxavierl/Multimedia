@@ -1,0 +1,36 @@
+        #  CONFIGURACIÓN ULTRA ESTABLE - backend/main.py
+        # Latencia: ~3-3.5 segundos | Cortes: Casi nulos
+        command = [
+            "ffmpeg",
+            "-y",
+            "-f", "v4l2",
+            "-video_size", "1280x720",
+            "-framerate", "25",
+            "-i", "/dev/video0",
+            "-vcodec", "libx264",
+            "-preset", "ultrafast",
+            "-tune", "zerolatency",
+            "-keyint_min", "1",
+            "-g", "15",                       #  GOP más largo
+            "-sc_threshold", "0",
+            "-b:v", "1000k",
+            "-maxrate", "1000k",
+            "-bufsize", "3000k",              #  Buffer más grande
+            "-pix_fmt", "yuv420p",
+            "-map", "0:v",
+            "-f", "dash",
+            "-seg_duration", "1.5",           #  Segmentos más largos
+            "-frag_duration", "1.5",
+            "-use_template", "1",
+            "-use_timeline", "0",
+            "-init_seg_name", "init-$RepresentationID$.mp4",
+            "-profile:v", "baseline",
+            "-media_seg_name", "video-$RepresentationID$-$Number$.mp4",
+            "-remove_at_exit", "1",
+            "-window_size", "7",              #  Más segmentos
+            "-extra_window_size", "3",        #  Más respaldo
+            "-ldash", "1",
+            "-streaming", "1",
+            "-target_latency", "3",           #  Target más alto
+            MPD_FILE
+        ]
