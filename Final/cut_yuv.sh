@@ -4,14 +4,14 @@
 # CONFIGURACIÓN
 # =========================
 INPUT="ElephantsDream_CIF_24fps.yuv"
-OUTPUT="videos/ElephantsDreamPesi.yuv"
+OUTPUT="videos/ElephantsDream.yuv"
 
 WIDTH=352
 HEIGHT=288
 FPS=24
 PIX_FMT="yuv420p"
 
-START_TIME="00:01:45"   # desde donde cortar
+START_TIME="00:00:45"   # desde donde cortar
 DURATION=60             # segundos
 
 # =========================
