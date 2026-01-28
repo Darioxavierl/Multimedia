@@ -1,0 +1,3 @@
+https://traces.cnets.io/trace.eas.asu.edu/yuv/akiyo/akiyo_cif.7z
+https://traces.cnets.io/trace.eas.asu.edu/yuv/coastguard/coastguard_cif.7z
+https://traces.cnets.io/trace.eas.asu.edu/yuv/ed/ED_CIF_24fps.gz
